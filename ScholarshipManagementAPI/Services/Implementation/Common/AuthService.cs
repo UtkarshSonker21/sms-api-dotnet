@@ -550,6 +550,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 Address = staff.PermAddress,
                 City = staff.PermCity,
                 Country = staff.PermCountry?.CountryName,
+                CountryId = staff.PermCountryId,
                 Zip = staff.PermZipCode,
 
                 DefaultCurrencyCode = currency.code,
@@ -574,6 +575,21 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
 
             var staff = user.Staff;
 
+            // Check duplicate login name
+            var loginName = dto.UsernameOrLoginName?.Trim();
+
+            if (string.IsNullOrWhiteSpace(loginName))
+                throw new CustomException("Login name is required.");
+
+            var exists = await _context.KfUsersLogins
+                .AnyAsync(x =>
+                    x.LoginId != loginId &&
+                    x.LoginName == loginName);
+
+            if (exists)
+                throw new CustomException("Login name already exists.");
+
+
             // 🔹 Update only editable fields
             staff.StaffSalutation = dto.Saluatation;
             staff.StaffFirstName = dto.FirstName;
@@ -583,45 +599,71 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
 
             staff.PermAddress = dto.Address;
             staff.PermCity = dto.City;
-            staff.PermCountryId = dto.Country;
+            staff.PermCountryId = dto.CountryId;
             staff.PermZipCode = dto.Zip;
+
+            // Update login name
+            user.LoginName = loginName;
 
             await _context.SaveChangesAsync();
 
             return true;
         }
 
-        public async Task<bool> ResetLoginNameAsync(ResetUserNameRequestDto request, long loginId)
+        public async Task<bool> UpdatePasswordAsync(UpdatePasswordRequestDto request, long loginId)
         {
-            if (string.IsNullOrWhiteSpace(request.LoginName))
-                throw new CustomException("New Login name is required.");
+            if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+                throw new CustomException("Current password is required.");
 
-            var newLoginName = request.LoginName.Trim();
+            if (string.IsNullOrWhiteSpace(request.UpdatedPassword))
+                throw new CustomException("New password is required.");
 
             var user = await _context.KfUsersLogins
-                .FirstOrDefaultAsync(x => x.LoginId == loginId && x.IsActive);
+                .FirstOrDefaultAsync(x =>
+                    x.LoginId == loginId &&
+                    x.IsActive);
 
             if (user == null)
                 throw new CustomException("User not found.");
 
-            // Prevent same username
-            if (user.LoginName == newLoginName)
-                throw new CustomException("New login name cannot be the same as current login name.");
+            var currentPassword = request.CurrentPassword.Trim();
+            var newPassword = request.UpdatedPassword.Trim();
 
-            // Check duplicate login name
-            var exists = await _context.KfUsersLogins
-                .AnyAsync(x => x.LoginName.ToLower() == newLoginName.ToLower()
-                 && x.LoginId != loginId);
+            // Verify current password
+            if (string.IsNullOrEmpty(user.Password) ||
+                !HelperMethods.VerifyPassword(
+                    user,
+                    user.Password,
+                    currentPassword))
+            {
+                throw new CustomException("Current password is incorrect.");
+            }
 
-            if (exists)
-                throw new CustomException("Login name already exists.");
+            // Prevent using the same password
+            if (HelperMethods.VerifyPassword(
+                user,
+                user.Password,
+                newPassword))
+            {
+                throw new CustomException(
+                    "New password cannot be same as old password.");
+            }
 
-            user.LoginName = newLoginName;
+            // Hash and update new password
+            user.Password = HelperMethods.HashPassword(
+                user,
+                newPassword);
+
+            // Clear temporary password/reset information
+            user.TempPassword = null;
+            user.TempPassDateTime = null;
 
             await _context.SaveChangesAsync();
 
             return true;
         }
+
+
 
 
         #endregion

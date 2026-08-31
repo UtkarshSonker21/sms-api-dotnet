@@ -18,7 +18,7 @@ namespace ScholarshipManagementAPI.Services.Interface.Common
 
         Task<bool> ResetUserPasswordAsync(ResetPasswordRequestDto request);
 
-        Task<bool> ResetLoginNameAsync(ResetUserNameRequestDto request , long loginId);
+        
 
 
         Task<bool> LoginWithCodeAsync(UserIdentifierDto request);
@@ -30,5 +30,8 @@ namespace ScholarshipManagementAPI.Services.Interface.Common
 
         Task<CurrentUserProfileDto?> GetMyProfileAsync(long loginId, long roleId);
         Task<bool> UpdateMyProfileAsync(long loginId, UpdateMyProfileDto dto);
+        Task<bool> UpdatePasswordAsync(UpdatePasswordRequestDto request, long loginId);
+
+
     }
 }

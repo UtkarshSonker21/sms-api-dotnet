@@ -118,23 +118,6 @@ namespace ScholarshipManagementAPI.Controllers.Common
         }
 
 
-        [HttpPost("reset-username")]
-        [Authorize]
-        public async Task<IActionResult> ResetLoginName([FromBody] ResetUserNameRequestDto request)
-        {
-            // request.LoginId = JwtClaimHelper.LoginId(User);
-            var loginId = JwtClaimHelper.LoginId(User);
-
-            var result = await _authService.ResetLoginNameAsync(request, loginId);
-
-            return Ok(new ApiResponseDto
-            {
-                Success = true,
-                Message = "User name has been reset successfully.",
-                Result = result
-            });
-        }
-
 
         [HttpPost("login-with-code")]
         public async Task<IActionResult> LoginWithCode([FromBody] UserIdentifierDto request)
@@ -217,6 +200,24 @@ namespace ScholarshipManagementAPI.Controllers.Common
             {
                 Success = true,
                 Message = "Profile updated successfully",
+                Result = result
+            });
+        }
+
+
+        [HttpPost("update-password")]
+        [Authorize]
+        public async Task<IActionResult> UpdatePassword([FromBody] UpdatePasswordRequestDto request)
+        {
+            // request.LoginId = JwtClaimHelper.LoginId(User);
+            var loginId = JwtClaimHelper.LoginId(User);
+
+            var result = await _authService.UpdatePasswordAsync(request, loginId);
+
+            return Ok(new ApiResponseDto
+            {
+                Success = true,
+                Message = "Password has been updated successfully.",
                 Result = result
             });
         }

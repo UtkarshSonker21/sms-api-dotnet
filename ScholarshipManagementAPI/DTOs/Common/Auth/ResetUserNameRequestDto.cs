@@ -1,10 +1,8 @@
 ﻿namespace ScholarshipManagementAPI.DTOs.Common.Auth
 {
-    public class ResetUserNameRequestDto
+    public class UpdatePasswordRequestDto
     {
-        //public long LoginId { get; set; }
-
-        // LoginName -> UserName
-        public string LoginName { get; set; } = string.Empty;
+        public string CurrentPassword { get; set; } = string.Empty;
+        public string UpdatedPassword { get; set; } = string.Empty;
     }
 }

@@ -44,6 +44,7 @@ namespace ScholarshipManagementAPI.DTOs.Common.Auth
         public string? City { get; set; }
         //public string? State { get; set; }
         public string? Country { get; set; }
+        public long? CountryId { get; set; }
         public string? Zip { get; set; }
 
         //public DateTime? LastLogin { get; set; }
