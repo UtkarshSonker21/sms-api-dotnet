@@ -267,7 +267,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
-            entity.Property(e => e.IsDraft).HasDefaultValue(true);
 
             entity.HasOne(d => d.Program).WithMany(p => p.KfProgramCosts)
                 .HasForeignKey(d => d.ProgramId)
@@ -288,7 +287,6 @@ public partial class AppDbContext : DbContext
 
             entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
-            entity.Property(e => e.IsDraft).HasDefaultValue(true);
             entity.Property(e => e.SemesterNo).HasDefaultValue(1);
 
             entity.HasOne(d => d.Course).WithMany(p => p.KfProgramCourses)
@@ -310,7 +308,6 @@ public partial class AppDbContext : DbContext
 
             entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
-            entity.Property(e => e.IsDraft).HasDefaultValue(true);
             entity.Property(e => e.IsRequired).HasDefaultValue(true);
 
             entity.HasOne(d => d.DocumentType).WithMany(p => p.KfProgramDocuments)
@@ -359,7 +356,6 @@ public partial class AppDbContext : DbContext
 
             entity.ToTable("kf_schools");
 
-            entity.Property(e => e.AccreditationStatus).HasDefaultValue((byte)1);
             entity.Property(e => e.Area).HasMaxLength(200);
             entity.Property(e => e.CenterName).HasMaxLength(200);
             entity.Property(e => e.CommitteeComment).HasMaxLength(2000);

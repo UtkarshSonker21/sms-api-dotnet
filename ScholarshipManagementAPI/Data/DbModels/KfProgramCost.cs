@@ -13,8 +13,6 @@ public partial class KfProgramCost
 
     public decimal Amount { get; set; }
 
-    public bool IsDraft { get; set; }
-
     public bool IsActive { get; set; }
 
     public long? CreatedBy { get; set; }
