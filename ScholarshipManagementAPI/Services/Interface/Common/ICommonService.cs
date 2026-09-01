@@ -1,4 +1,6 @@
-﻿using ScholarshipManagementAPI.DTOs.Common.HrStaff;
+﻿using ScholarshipManagementAPI.DTOs.Common.Auth;
+using ScholarshipManagementAPI.DTOs.Common.GlobalSearch;
+using ScholarshipManagementAPI.DTOs.Common.HrStaff;
 using ScholarshipManagementAPI.DTOs.Common.Menu;
 using ScholarshipManagementAPI.DTOs.Common.Settings;
 using ScholarshipManagementAPI.DTOs.SuperADmin.ZzMasterDropdown;
@@ -25,7 +27,7 @@ namespace ScholarshipManagementAPI.Services.Interface.Common
 
 
 
-
+        Task<GlobalSearchResponseDto> GlobalSearchAsync(GlobalSearchRequestDto request, LoggedInUserDto currentUser);
 
     }
 }

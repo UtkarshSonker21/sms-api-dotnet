@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ScholarshipManagementAPI.Data.Contexts;
 using ScholarshipManagementAPI.Data.DbModels;
+using ScholarshipManagementAPI.DTOs.Common.Auth;
+using ScholarshipManagementAPI.DTOs.Common.GlobalSearch;
 using ScholarshipManagementAPI.DTOs.Common.HrStaff;
 using ScholarshipManagementAPI.DTOs.Common.Menu;
 using ScholarshipManagementAPI.DTOs.Common.Settings;
@@ -108,6 +110,54 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
         }
 
 
+        public async Task<GlobalSearchResponseDto> GlobalSearchAsync(GlobalSearchRequestDto request, LoggedInUserDto currentUser)
+        {
+            var response = new GlobalSearchResponseDto();
+
+            if (string.IsNullOrWhiteSpace(request.SearchText))
+                return response;
+
+            var search = request.SearchText.Trim().ToLower();
+
+            var maxResults = request.Limit > 0
+               ? request.Limit
+               : 5;
+
+            switch (currentUser.StaffType)
+            {
+                case StaffType.SuperAdmin:
+                    await SearchNgoAsync(response, search, currentUser, maxResults);
+                    break;
+
+                case StaffType.Ngo:
+                    await SearchNgoAsync(response, search, currentUser, maxResults);
+                    break;
+
+                case StaffType.University:
+                    await SearchUniversityAsync(response, search, currentUser, maxResults);
+                    break;
+
+                case StaffType.School:
+                    await SearchSchoolAsync(response, search, currentUser, maxResults);
+                    break;
+
+                case StaffType.Marketing:
+                    await SearchMarketingAsync(response, search, currentUser, maxResults);
+                    break;
+
+                case StaffType.Finance:
+                    await SearchFinanceAsync(response, search, currentUser, maxResults);
+                    break;
+            }
+
+
+            // Remove empty sections
+            response.Sections = response.Sections
+                .Where(x => x.Items.Count > 0)
+                .ToList();
+
+            return response;
+        }
 
 
 
@@ -216,6 +266,286 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 SortMenus(menu.SubMenus);
             }
         }
+
+
+        private async Task SearchNgoAsync(
+            GlobalSearchResponseDto response,
+            string search,
+            LoggedInUserDto currentUser,
+            int maxResults)
+        {
+            // Universities
+            var universities = await _context.KfUniversities
+                .AsNoTracking()
+                .Where(x => x.IsActive && !x.IsDraft)
+                .Where(x =>
+                    x.UniversityName.ToLower().Contains(search) ||
+                    x.City.ToLower().Contains(search))
+                .OrderBy(x => x.UniversityName)
+                .Take(maxResults)
+                .Select(x => new GlobalSearchItemDto
+                {
+                    Id = x.UniversityId,
+                    Title = x.UniversityName,
+                    Subtitle = x.City,
+                    Route = $"/university-accreditation-detail/{x.UniversityId}"
+                })
+                .ToListAsync();
+
+            if (universities.Count > 0)
+            {
+                response.Sections.Add(new GlobalSearchSectionDto
+                {
+                    SectionName = "UNIVERSITIES",
+                    Items = universities
+                });
+            }
+
+
+            // Programs
+            var programs = await _context.KfPrograms
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .Where(x =>
+                    x.ProgramName.ToLower().Contains(search) ||
+                    x.ProgramCode.ToLower().Contains(search))
+                .OrderBy(x => x.ProgramName)
+                .Take(maxResults)
+                .Select(x => new GlobalSearchItemDto
+                {
+                    Id = x.ProgramId,
+                    Title = x.ProgramName,
+                    Subtitle = x.ProgramCode,
+                    Route = $"/program-accreditation-detail/{x.ProgramId}"
+                })
+                .ToListAsync();
+
+            if (programs.Count > 0)
+            {
+                response.Sections.Add(new GlobalSearchSectionDto
+                {
+                    SectionName = "PROGRAMS",
+                    Items = programs
+                });
+            }
+
+
+            // Schools
+            var schools = await _context.KfSchools
+                .AsNoTracking()
+                .Where(x => x.IsActive && !x.IsDraft)
+                .Where(x =>
+                    x.SchoolName.ToLower().Contains(search) ||
+                    x.ShortName.ToLower().Contains(search))
+                .OrderBy(x => x.SchoolName)
+                .Take(maxResults)
+                .Select(x => new GlobalSearchItemDto
+                {
+                    Id = x.SchoolId,
+                    Title = x.SchoolName,
+                    Subtitle = x.ShortName,
+                    Route = $"/school-accreditation-detail/{x.SchoolId}"
+                })
+                .ToListAsync();
+
+            if (schools.Count > 0)
+            {
+                response.Sections.Add(new GlobalSearchSectionDto
+                {
+                    SectionName = "SCHOOLS",
+                    Items = schools
+                });
+            }
+
+
+            // Cases
+            // Will be implemented later.
+        }
+
+
+        private async Task SearchUniversityAsync(
+            GlobalSearchResponseDto response,
+            string search,
+            LoggedInUserDto currentUser,
+            int maxResults)
+        {
+            // Students
+            var students = await _context.KfStudentRegistrations
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .Where(x =>
+                    x.FirstName.ToLower().Contains(search) ||
+                    x.LastName.ToLower().Contains(search) ||
+                    x.StudentCode.ToLower().Contains(search))
+                .OrderBy(x => x.FirstName)
+                .Take(maxResults)
+                .Select(x => new GlobalSearchItemDto
+                {
+                    Id = x.StudentId,
+                    Title = x.FirstName + " " + x.LastName,
+                    Subtitle = x.StudentCode,
+                    Route = $"/university-student-details/{x.StudentId}"
+                })
+                .ToListAsync();
+
+            if (students.Count > 0)
+            {
+                response.Sections.Add(new GlobalSearchSectionDto
+                {
+                    SectionName = "STUDENTS",
+                    Items = students
+                });
+            }
+
+
+            // Programs
+            var programs = await _context.KfPrograms
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .Where(x =>
+                    x.ProgramName.ToLower().Contains(search) ||
+                    x.ProgramCode.ToLower().Contains(search))
+                .OrderBy(x => x.ProgramName)
+                .Take(maxResults)
+                .Select(x => new GlobalSearchItemDto
+                {
+                    Id = x.ProgramId,
+                    Title = x.ProgramName,
+                    Subtitle = x.ProgramCode,
+                    Route = $"/programs-detail/{x.ProgramId}"
+                })
+                .ToListAsync();
+
+            if (programs.Count > 0)
+            {
+                response.Sections.Add(new GlobalSearchSectionDto
+                {
+                    SectionName = "PROGRAMS",
+                    Items = programs
+                });
+            }
+
+
+            // Payments
+            // Will be implemented later.
+        }
+
+
+
+        private async Task SearchSchoolAsync(
+            GlobalSearchResponseDto response,
+            string search,
+            LoggedInUserDto currentUser,
+            int maxResults)
+        {
+            // Nominees / Students
+            var nominees = await _context.KfStudentRegistrations
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .Where(x =>
+                    x.FirstName.ToLower().Contains(search) ||
+                    x.LastName.ToLower().Contains(search) ||
+                    x.StudentCode.ToLower().Contains(search))
+                .OrderBy(x => x.FirstName)
+                .Take(maxResults)
+                .Select(x => new GlobalSearchItemDto
+                {
+                    Id = x.StudentId,
+                    Title = x.FirstName + " " + x.LastName,
+                    Subtitle = x.StudentCode,
+                    Route = $"/edit-student/{x.StudentId}"
+                })
+                .ToListAsync();
+
+            if (nominees.Count > 0)
+            {
+                response.Sections.Add(new GlobalSearchSectionDto
+                {
+                    SectionName = "NOMINEES",
+                    Items = nominees
+                });
+            }
+        }
+
+
+        private async Task SearchMarketingAsync(
+            GlobalSearchResponseDto response,
+            string search,
+            LoggedInUserDto currentUser,
+            int maxResults)
+        {
+            // Students
+            // TODO: Add marketing-specific search sections later.
+
+            var students = await _context.KfStudentRegistrations
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .Where(x =>
+                    x.FirstName.ToLower().Contains(search) ||
+                    x.LastName.ToLower().Contains(search) ||
+                    x.StudentCode.ToLower().Contains(search))
+                .OrderBy(x => x.FirstName)
+                .Take(maxResults)
+                .Select(x => new GlobalSearchItemDto
+                {
+                    Id = x.StudentId,
+                    Title = x.FirstName + " " + x.LastName,
+                    Subtitle = x.StudentCode,
+                    Route = null
+                })
+                .ToListAsync();
+
+            if (students.Count > 0)
+            {
+                response.Sections.Add(new GlobalSearchSectionDto
+                {
+                    SectionName = "STUDENTS",
+                    Items = students
+                });
+            }
+        }
+
+
+
+        private async Task SearchFinanceAsync(
+            GlobalSearchResponseDto response,
+            string search,
+            LoggedInUserDto currentUser,
+            int maxResults)
+        {
+            // Students
+            // TODO: Add finance-specific search sections later.
+
+            var students = await _context.KfStudentRegistrations
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .Where(x =>
+                    x.FirstName.ToLower().Contains(search) ||
+                    x.LastName.ToLower().Contains(search) ||
+                    x.StudentCode.ToLower().Contains(search))
+                .OrderBy(x => x.FirstName)
+                .Take(maxResults)
+                .Select(x => new GlobalSearchItemDto
+                {
+                    Id = x.StudentId,
+                    Title = x.FirstName + " " + x.LastName,
+                    Subtitle = x.StudentCode,
+                    Route = null
+                })
+                .ToListAsync();
+
+            if (students.Count > 0)
+            {
+                response.Sections.Add(new GlobalSearchSectionDto
+                {
+                    SectionName = "STUDENTS",
+                    Items = students
+                });
+            }
+        }
+
+
+
 
         #endregion
 

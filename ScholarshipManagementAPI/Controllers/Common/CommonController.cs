@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ScholarshipManagementAPI.DTOs.Common;
+using ScholarshipManagementAPI.DTOs.Common.GlobalSearch;
 using ScholarshipManagementAPI.DTOs.Common.Response;
 using ScholarshipManagementAPI.Helper.Utilities;
 using ScholarshipManagementAPI.Services.Implementation.Common;
@@ -17,11 +18,12 @@ namespace ScholarshipManagementAPI.Controllers.Common
     public class CommonController : ControllerBase
     {
         private readonly ICommonService _service;
-        
+        private readonly CurrentUserContextService _currentUser;
 
-        public CommonController(ICommonService service)
+        public CommonController(ICommonService service, CurrentUserContextService currentUser)
         {
             _service = service;
+            _currentUser = currentUser;
         }
 
 
@@ -104,6 +106,23 @@ namespace ScholarshipManagementAPI.Controllers.Common
 
 
 
+        [HttpPost("global-search")]
+        [Authorize]
+        public async Task<IActionResult> GlobalSearch([FromBody] GlobalSearchRequestDto request)
+        {
+            var currentUser = await _currentUser.GetCurrentUserAsync();
+
+            var result = await _service.GlobalSearchAsync(
+                request,
+                currentUser);
+
+            return Ok(new ApiResponseDto
+            {
+                Success = true,
+                Result = result,
+                Message = "Search completed successfully."
+            });
+        }
 
 
 
