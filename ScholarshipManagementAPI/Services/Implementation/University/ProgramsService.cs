@@ -90,6 +90,11 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     throw new CustomException("Program with same code already exists");
                 }
 
+                if (dto.NumberOfSemesters <= 0)
+                {
+                    throw new CustomException("Number of semesters must be greater than 0.");
+                }
+
                 if (dto.Documents?.Any() == true)
                 {
                     var documentTypeIds = dto.Documents

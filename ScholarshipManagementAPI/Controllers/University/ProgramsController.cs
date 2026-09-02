@@ -36,7 +36,7 @@ namespace ScholarshipManagementAPI.Controllers.University
             {
                 Success = true,
                 Result = id,
-                Message = "Faculty created successfully"
+                Message = "Program created successfully"
             });
         }
 
