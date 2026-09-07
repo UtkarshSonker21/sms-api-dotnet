@@ -36,6 +36,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<KfProgramRegistrationWindow> KfProgramRegistrationWindows { get; set; }
 
+    public virtual DbSet<KfProgramSemester> KfProgramSemesters { get; set; }
+
     public virtual DbSet<KfSchool> KfSchools { get; set; }
 
     public virtual DbSet<KfSponsorshipCategoryMapping> KfSponsorshipCategoryMappings { get; set; }
@@ -93,6 +95,7 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<ZzMasterCurrency> ZzMasterCurrencies { get; set; }
 
     public virtual DbSet<ZzMasterDropdown> ZzMasterDropdowns { get; set; }
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -298,6 +301,10 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.ProgramId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_kf_program_courses_Program");
+
+            entity.HasOne(d => d.ProgramSemester).WithMany(p => p.KfProgramCourses)
+                .HasForeignKey(d => d.ProgramSemesterId)
+                .HasConstraintName("FK_KfProgramCourses_ProgramSemester");
         });
 
         modelBuilder.Entity<KfProgramDocument>(entity =>
@@ -348,6 +355,22 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.KfProgramRegistrationWindowUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_kf_program_registration_windows_updatedby");
+        });
+
+        modelBuilder.Entity<KfProgramSemester>(entity =>
+        {
+            entity.HasKey(e => e.ProgramSemesterId).HasName("PK_KfProgramSemesters");
+
+            entity.ToTable("kf_program_semesters");
+
+            entity.HasIndex(e => new { e.ProgramId, e.SemesterNo }, "UQ_KfProgramSemesters_Program_SemesterNo").IsUnique();
+
+            entity.Property(e => e.SemesterName).HasMaxLength(200);
+
+            entity.HasOne(d => d.Program).WithMany(p => p.KfProgramSemesters)
+                .HasForeignKey(d => d.ProgramId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_KfProgramSemesters_Program");
         });
 
         modelBuilder.Entity<KfSchool>(entity =>
@@ -625,6 +648,10 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.ProgramId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_kf_student_academic_registrations_Program");
+
+            entity.HasOne(d => d.ProgramSemester).WithMany(p => p.KfStudentAcademicRegistrations)
+                .HasForeignKey(d => d.ProgramSemesterId)
+                .HasConstraintName("FK_KfStudentAcademicRegistrations_ProgramSemester");
 
             entity.HasOne(d => d.Student).WithMany(p => p.KfStudentAcademicRegistrations)
                 .HasForeignKey(d => d.StudentId)

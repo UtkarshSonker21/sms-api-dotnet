@@ -29,7 +29,11 @@ public partial class KfProgramCourse
 
     public DateTime? UpdatedDate { get; set; }
 
+    public long? ProgramSemesterId { get; set; }
+
     public virtual KfCourse Course { get; set; } = null!;
 
     public virtual KfProgram Program { get; set; } = null!;
+
+    public virtual KfProgramSemester? ProgramSemester { get; set; }
 }

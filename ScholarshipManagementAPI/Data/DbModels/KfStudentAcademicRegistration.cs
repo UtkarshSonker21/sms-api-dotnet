@@ -27,11 +27,15 @@ public partial class KfStudentAcademicRegistration
 
     public DateTime? UpdatedOn { get; set; }
 
+    public long? ProgramSemesterId { get; set; }
+
     public virtual KfStudentProgramApplication Application { get; set; } = null!;
 
     public virtual KfUsersLogin CreatedByNavigation { get; set; } = null!;
 
     public virtual KfProgram Program { get; set; } = null!;
+
+    public virtual KfProgramSemester? ProgramSemester { get; set; }
 
     public virtual KfStudentRegistration Student { get; set; } = null!;
 
