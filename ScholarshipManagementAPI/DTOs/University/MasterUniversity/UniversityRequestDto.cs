@@ -158,6 +158,8 @@ namespace ScholarshipManagementAPI.DTOs.University.MasterUniversity
 
         public string? FormattedUpdatedDate { get; set; }
 
+        public long? ProgramsCount { get; set; }
+
         #endregion
     }
 }

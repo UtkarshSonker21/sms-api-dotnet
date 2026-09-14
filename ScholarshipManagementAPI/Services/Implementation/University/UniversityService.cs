@@ -560,7 +560,13 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                         : null,
 
                     CreatedDate = x.CreatedDate,
-                    FormattedCreatedDate = x.CreatedDate.ToString("dd MMM yyyy")
+                    FormattedCreatedDate = x.CreatedDate.ToString("dd MMM yyyy"),
+
+                    FacultiesCount = x.FacultiesCount,
+
+                    // Programs belonging to this university only
+                    ProgramsCount = _context.KfPrograms
+                    .Count(p => p.UniversityId == x.UniversityId && !p.IsDraft && p.IsActive)
                 })
                 .ToListAsync();
 
