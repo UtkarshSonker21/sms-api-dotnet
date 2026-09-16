@@ -74,7 +74,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
 
                     Remarks = dto.Remarks,
                     IsActive = true,
-
+                    IsDisabled = dto.IsDisabled,
                     CreatedBy = dto.CreatedBy,
                     CreatedDate = DateTime.UtcNow,
                 };
@@ -212,6 +212,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
 
                 staff.Remarks = dto.Remarks;
                 staff.IsActive = true;
+                staff.IsDisabled = dto.IsDisabled;
 
                 staff.UpdatedBy = dto.UpdatedBy;
                 staff.UpdatedDate = DateTime.UtcNow;
@@ -279,6 +280,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 // Soft delete
                 staff.IsActive = false;
                 staff.Remarks += "[Deleted]";
+                staff.IsDisabled = true;
                 usersLogin.IsActive = false;
 
                 _context.KfStaffs.Update(staff);
@@ -331,6 +333,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
 
                     Remarks = x.Remarks,
                     IsActive = x.IsActive,
+                    IsDisabled = x.IsDisabled,
 
                     LoginName = x.KfUsersLogins.Select(u => u.LoginName).FirstOrDefault(),
 
@@ -370,6 +373,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
             if (filter.IsActive.HasValue)
             {
                 query = query.Where(x => x.IsActive == filter.IsActive.Value);
+            }
+
+            // disabled filter
+            if (filter.IsDisabled.HasValue)
+            {
+                query = query.Where(x => x.IsDisabled == filter.IsDisabled.Value);
             }
 
             /* Global Search */
@@ -429,7 +438,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
 
                     Remarks = x.Remarks,
                     IsActive = x.IsActive,
-
+                    IsDisabled = x.IsDisabled,
                     LoginName = x.KfUsersLogins.Select(u => u.LoginName).FirstOrDefault(),
 
 

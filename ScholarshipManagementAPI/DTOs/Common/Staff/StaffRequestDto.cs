@@ -64,6 +64,7 @@ namespace ScholarshipManagementAPI.DTOs.Common.Staff
 
         
         public bool IsActive { get; set; }
+        public bool IsDisabled { get; set; }
 
 
         // ===== Extra (Response convenience) =====

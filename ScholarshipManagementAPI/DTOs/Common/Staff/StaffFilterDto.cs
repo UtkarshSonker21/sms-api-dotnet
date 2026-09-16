@@ -8,5 +8,6 @@ namespace ScholarshipManagementAPI.DTOs.Common.Staff
         public long? OrganisationId { get; set; }   // School / University / Ngo
         public long? CountryId { get; set; }   // School / University / Ngo
         public bool? IsActive { get; set; }
+        public bool? IsDisabled { get; set; }
     }
 }

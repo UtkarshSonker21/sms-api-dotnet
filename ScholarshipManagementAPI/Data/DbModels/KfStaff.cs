@@ -50,6 +50,8 @@ public partial class KfStaff
 
     public DateTime? UpdatedDate { get; set; }
 
+    public bool IsDisabled { get; set; }
+
     public virtual KfUsersLogin CreatedByNavigation { get; set; } = null!;
 
     public virtual ZzMasterDropdown GenderNavigation { get; set; } = null!;

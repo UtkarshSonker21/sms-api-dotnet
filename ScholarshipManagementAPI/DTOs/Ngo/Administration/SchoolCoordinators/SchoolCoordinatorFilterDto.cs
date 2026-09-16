@@ -9,5 +9,6 @@ namespace ScholarshipManagementAPI.DTOs.Ngo.Administration.SchoolCoordinators
         public long? RoleId { get; set; }
 
         public bool? IsActive { get; set; }
+        public bool? IsDisabled { get; set; }
     }
 }

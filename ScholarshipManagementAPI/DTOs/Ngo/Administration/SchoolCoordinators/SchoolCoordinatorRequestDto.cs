@@ -62,6 +62,7 @@ namespace ScholarshipManagementAPI.DTOs.Ngo.Administration.SchoolCoordinators
 
         // Status
         public bool IsActive { get; set; }
+        public bool IsDisabled { get; set; }
 
         // Audit Information (Response Only)
         public DateTime? CreatedDate { get; set; }

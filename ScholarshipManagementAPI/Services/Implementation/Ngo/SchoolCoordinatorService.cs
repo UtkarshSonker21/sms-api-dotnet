@@ -88,6 +88,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
 
                     Remarks = dto.Remarks,
                     IsActive = true,
+                    IsDisabled = dto.IsDisabled,
 
                     CreatedDate = DateTime.UtcNow,
                     CreatedBy = currentUser.LoginId
@@ -233,6 +234,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
 
                 staff.MobileNumber = dto.MobileNumber;
                 staff.Remarks = dto.Remarks;
+                staff.IsDisabled = dto.IsDisabled;
 
                 staff.UpdatedDate = DateTime.UtcNow;
                 staff.UpdatedBy = currentUser.LoginId;
@@ -323,6 +325,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                     return false;
 
                 staff.IsActive = false;
+                staff.IsDisabled = true;
                 staff.UpdatedBy = currentUser.LoginId;
                 staff.UpdatedDate = DateTime.UtcNow;
 
@@ -418,6 +421,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                     // Status
                     IsDefaultRole = x.IsDefault,
                     IsActive = x.Login.IsActive,
+                    IsDisabled = x.Login.Staff.IsDisabled,
 
                     // Schools
                     SchoolIds = x.Login.Staff.KfStaffSchoolCoordinatorMappings
@@ -492,6 +496,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                 query = query.Where(x => x.RoleId == filter.RoleId.Value);
             }
 
+            // Disabled Status
+            if (filter.IsDisabled.HasValue)
+            {
+                query = query.Where(x => x.Login.Staff.IsDisabled == filter.IsDisabled.Value);
+            }
+
             // Global Search
             if (!string.IsNullOrWhiteSpace(filter.SearchText))
             {
@@ -552,6 +562,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                     // Status
                     IsDefaultRole = x.IsDefault,
                     IsActive = x.Login.IsActive,
+                    IsDisabled = x.Login.Staff.IsDisabled,
 
                     // Audit
                     CreatedDate = x.Login.Staff.CreatedDate,
