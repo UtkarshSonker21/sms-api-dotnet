@@ -827,9 +827,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 case StaffType.Ngo:
                     {
                         // NGO should only see applications after they have been awarded
+                        //query = query.Where(x =>
+                        //    x.ApplicationStatus >= (int)StudentApplicationStatus.Awarded &&
+                        //    x.ApplicationStatus <= (int)StudentApplicationStatus.Sponsored);
+
                         query = query.Where(x =>
-                            x.ApplicationStatus >= (int)StudentApplicationStatus.Awarded &&
-                            x.ApplicationStatus <= (int)StudentApplicationStatus.Sponsored);
+                            x.ApplicationStatus >= (int)StudentApplicationStatus.Awarded );
 
                         break;
                     }
@@ -970,9 +973,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
 
                 case StaffType.Ngo:
 
+                    //query = query.Where(x =>
+                    //        x.ApplicationStatus >= (int)StudentApplicationStatus.Awarded &&
+                    //        x.ApplicationStatus <= (int)StudentApplicationStatus.Sponsored);
+
                     query = query.Where(x =>
-                            x.ApplicationStatus >= (int)StudentApplicationStatus.Awarded &&
-                            x.ApplicationStatus <= (int)StudentApplicationStatus.Sponsored);
+                            x.ApplicationStatus >= (int)StudentApplicationStatus.Awarded);
 
                     break;
             }
