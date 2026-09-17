@@ -81,6 +81,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
 
                     Remarks = dto.Remarks,
                     IsActive = true,
+                    IsDisabled = false,
 
                     CreatedDate = DateTime.UtcNow,
                     CreatedBy = currentUser.LoginId
@@ -205,6 +206,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                 staff.MobileNumber = dto.MobileNumber;
 
                 staff.Remarks = dto.Remarks;
+                staff.IsDisabled = dto.IsDisabled;
 
                 // not updating IsActive here,
                 // staff.IsActive = dto.IsActive;
@@ -277,6 +279,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                     return false;
 
                 staff.IsActive = false;
+                staff.IsDisabled = true;
                 staff.UpdatedBy = currentUser.LoginId;
                 staff.UpdatedDate = DateTime.UtcNow;
 
@@ -363,6 +366,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                     // Status
                     IsDefaultRole = x.IsDefault,
                     IsActive = x.Login.IsActive,
+                    IsDisabled = x.Login.Staff.IsDisabled,
 
                     // Audit
                     CreatedDate = x.Login.Staff.CreatedDate,
@@ -394,7 +398,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                     x.Login.IsActive &&
                     x.Login.Staff.IsActive &&
                     x.Login.Staff.StaffType != (long)StaffType.School &&
-                    x.Login.Staff.StaffType != (long)StaffType.University)
+                    x.Login.Staff.StaffType != (long)StaffType.University &&
+                    x.Login.Staff.StaffType != (long)StaffType.SuperAdmin )
                 .Include(x => x.Login)
                     .ThenInclude(x => x.Staff)
                 .Include(x => x.Role)
@@ -416,6 +421,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
             if (filter.RoleId.HasValue)
             {
                 query = query.Where(x => x.RoleId == filter.RoleId.Value);
+            }
+
+            // disabled status
+            if (filter.IsDisabled.HasValue)
+            {
+                query = query.Where(x => x.Login.Staff.IsDisabled == filter.IsDisabled.Value);
             }
 
             // Global Search
@@ -478,6 +489,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                     // Status
                     IsDefaultRole = x.IsDefault,
                     IsActive = x.Login.IsActive,
+                    IsDisabled = x.Login.Staff.IsDisabled,
 
                     // Audit
                     CreatedDate = x.Login.Staff.CreatedDate,

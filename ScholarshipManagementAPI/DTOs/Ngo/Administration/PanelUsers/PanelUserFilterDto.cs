@@ -8,5 +8,6 @@ namespace ScholarshipManagementAPI.DTOs.Ngo.Administration.PanelUsers
         public long? StaffType { get; set; }
 
         public bool? IsActive { get; set; }
+        public bool? IsDisabled { get; set; }
     }
 }

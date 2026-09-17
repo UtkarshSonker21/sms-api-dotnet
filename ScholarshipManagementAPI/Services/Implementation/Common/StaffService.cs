@@ -354,6 +354,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
         {
             var query = _context.KfStaffs
                 .AsNoTracking()
+                .Where(x => x.IsActive)
                 .Include(x => x.KfUsersLogins)
                 .AsQueryable();
 
