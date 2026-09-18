@@ -27,7 +27,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.SuperAdmin
         {
             return await _context.KfUsersLogins
                 .AsNoTracking()
-                .Where(x => x.LoginId == id)
+                .Where(x => x.LoginId == id && x.IsActive)
                 .Include(x => x.Staff)
                 .Select(x => new UsersLoginRequestDto
                 {
@@ -37,6 +37,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.SuperAdmin
                     Password = x.Password,
                     RecoveryEmail = x.RecoveryEmail,
                     IsActive = x.IsActive,
+                    IsDisabled = x.IsDisabled,
                     TempPassword = x.TempPassword,
                     TempPassDateTime = x.TempPassDateTime,
                     CreatedDate = x.CreatedDate,
@@ -51,14 +52,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.SuperAdmin
         {
             var query = _context.KfUsersLogins
                 .AsNoTracking()
+                .Where(x => x.IsActive)
                 .Include(x => x.Staff)
                 .AsQueryable();
 
-            if (filter.IsActive.HasValue)
-                query = query.Where(x => x.IsActive == filter.IsActive);
-
-            //if (filter.LoginType.HasValue)
-            //    query = query.Where(x => x.LoginType == filter.LoginType);
+            if (filter.IsDisabled.HasValue)
+                query = query.Where(x => x.IsDisabled == filter.IsDisabled);
 
             /* Global Search */
             if (!string.IsNullOrWhiteSpace(filter.SearchText))
@@ -94,6 +93,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.SuperAdmin
                     Password = x.Password,
                     RecoveryEmail = x.RecoveryEmail,
                     IsActive = x.IsActive,
+                    IsDisabled = x.IsDisabled,
                     TempPassword = x.TempPassword,
                     TempPassDateTime = x.TempPassDateTime,
                     CreatedDate = x.CreatedDate,

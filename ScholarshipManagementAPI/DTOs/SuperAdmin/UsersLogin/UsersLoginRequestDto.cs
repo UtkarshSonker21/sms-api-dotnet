@@ -23,6 +23,7 @@ namespace ScholarshipManagementAPI.DTOs.SuperAdmin.UsersLogin
 
         [Required]
         public bool IsActive { get; set; }
+        public bool IsDisabled { get; set; }
 
 
 
