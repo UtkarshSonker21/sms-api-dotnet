@@ -97,6 +97,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
 
                     RecoveryEmail = dto.OfficialEmail,
                     IsActive = true,
+                    IsDisabled = dto.IsDisabled,
 
                     CreatedBy = dto.CreatedBy,
                     CreatedDate = DateTime.UtcNow,
@@ -231,6 +232,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 //usersLogin.LoginName = dto.LoginName;
                 usersLogin.RecoveryEmail = dto.OfficialEmail;
                 usersLogin.IsActive = true;
+                usersLogin.IsDisabled = dto.IsDisabled;
                 usersLogin.UpdatedBy = dto.UpdatedBy;
                 usersLogin.UpdatedDate = DateTime.UtcNow;
 
@@ -282,6 +284,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 staff.Remarks += "[Deleted]";
                 staff.IsDisabled = true;
                 usersLogin.IsActive = false;
+                usersLogin.IsDisabled = true;
 
                 _context.KfStaffs.Update(staff);
                 _context.KfUsersLogins.Update(usersLogin);

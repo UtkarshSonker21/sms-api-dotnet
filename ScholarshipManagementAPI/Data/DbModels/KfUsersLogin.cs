@@ -29,6 +29,8 @@ public partial class KfUsersLogin
 
     public DateTime? UpdatedDate { get; set; }
 
+    public bool IsDisabled { get; set; }
+
     public virtual KfUsersLogin CreatedByNavigation { get; set; } = null!;
 
     public virtual ICollection<KfUsersLogin> InverseCreatedByNavigation { get; set; } = new List<KfUsersLogin>();

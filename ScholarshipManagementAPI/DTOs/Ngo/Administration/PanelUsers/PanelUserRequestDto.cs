@@ -52,7 +52,7 @@ namespace ScholarshipManagementAPI.DTOs.Ngo.Administration.PanelUsers
 
         //status
         public bool IsActive { get; set; }
-        public bool IsDisabled { get; set; }
+        public bool IsDisabled { get; set; } = false;
 
         // Audit Information (Response Only)
         public DateTime? CreatedDate { get; set; }

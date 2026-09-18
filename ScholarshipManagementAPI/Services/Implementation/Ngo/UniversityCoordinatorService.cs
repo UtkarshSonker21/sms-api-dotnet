@@ -116,7 +116,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                     TempPassDateTime = null,
 
                     IsActive = true,
-
+                    IsDisabled = dto.IsDisabled,
                     CreatedDate = DateTime.UtcNow,
                     CreatedBy = currentUser.LoginId
                 };
@@ -264,6 +264,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                 // not updating IsActive here,
                 // login.IsActive = dto.IsActive;
 
+                login.IsDisabled = dto.IsDisabled;
                 login.UpdatedDate = DateTime.UtcNow;
                 login.UpdatedBy = currentUser.LoginId;
 
@@ -352,6 +353,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                 if (login != null)
                 {
                     login.IsActive = false;
+                    login.IsDisabled = true;
                     login.UpdatedBy = currentUser.LoginId;
                     login.UpdatedDate = DateTime.UtcNow;
 
