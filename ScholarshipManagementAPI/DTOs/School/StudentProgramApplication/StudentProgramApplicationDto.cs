@@ -73,4 +73,41 @@ public class StudentProgramApplicationDto
     public string? UniversityCountryName { get; set; }
 
 
+        // Recently Added
+
+        // Personal Information - Additional
+        public string? Tribe { get; set; }
+
+        // Address
+        public string? House { get; set; }
+
+        // Student Source
+        public bool? FromDaSchool { get; set; }
+        public string? DaStudentCode { get; set; }
+
+        // Behavioral & Social Evaluation
+        public long? FinancialNeedStatusId { get; set; }
+        public string? FinancialNeedStatusName { get; set; }
+
+        public long? SelfRelianceLevelId { get; set; }
+        public string? SelfRelianceLevelName { get; set; }
+
+        public long? MotivationLevelId { get; set; }
+        public string? MotivationLevelName { get; set; }
+
+        public long? FutureGoalsLevelId { get; set; }
+        public string? FutureGoalsLevelName { get; set; }
+
+        // Transfer Student Information
+        public string? TransferInstitution { get; set; }
+        public string? TransferProgram { get; set; }
+        public string? TransferInstitutionType { get; set; }
+        public decimal? TransferCredits { get; set; }
+        public DateTime? TransferLastSemEnd { get; set; }
+        public decimal? TransferGpa { get; set; }
+
+        // Recommendation
+        public string? RecommendationLetterPath { get; set; }
+        public string? RecommendationLetterNotes { get; set; }
+
 }

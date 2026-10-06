@@ -1043,7 +1043,50 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                     FacultyName = x.Program.Faculty.FacultyName,
 
                     UniversityId = x.Program.UniversityId,
-                    UniversityName = x.Program.University.UniversityName
+                    UniversityName = x.Program.University.UniversityName,
+
+                    // Personal Information - Additional
+                    Tribe = x.Student.Tribe,
+
+                    // Address
+                    House = x.Student.House,
+
+                    // Student Source
+                    FromDaSchool = x.Student.FromDaSchool,
+                    DaStudentCode = x.Student.DaStudentCode,
+
+                    // Behavioral & Social Evaluation
+                    FinancialNeedStatusId = x.Student.FinancialNeedStatusId,
+                    FinancialNeedStatusName = x.Student.FinancialNeedStatus != null
+                    ? x.Student.FinancialNeedStatus.DisplayText : null,
+
+                    SelfRelianceLevelId = x.Student.SelfRelianceLevelId,
+                    SelfRelianceLevelName = x.Student.SelfRelianceLevel != null
+                    ? x.Student.SelfRelianceLevel.DisplayText : null,
+
+                    MotivationLevelId = x.Student.MotivationLevelId,
+                    MotivationLevelName = x.Student.MotivationLevel != null
+                    ? x.Student.MotivationLevel.DisplayText : null,
+
+                    FutureGoalsLevelId = x.Student.FutureGoalsLevelId,
+                    FutureGoalsLevelName = x.Student.FutureGoalsLevel != null
+                    ? x.Student.FutureGoalsLevel.DisplayText : null,
+
+                    // Transfer Student Information
+                    TransferInstitution = x.Student.TransferInstitution,
+                    TransferProgram = x.Student.TransferProgram,
+                    TransferInstitutionType = x.Student.TransferInstitutionType,
+                    TransferCredits = x.Student.TransferCredits,
+
+                    TransferLastSemEnd = x.Student.TransferLastSemEnd.HasValue
+                    ? x.Student.TransferLastSemEnd.Value.ToDateTime(TimeOnly.MinValue) : null,
+
+                    TransferGpa = x.Student.TransferGpa,
+
+                    // Recommendation
+                    RecommendationLetterPath = x.Student.RecommendationLetterPath,
+                    RecommendationLetterNotes = x.Student.RecommendationLetterNotes,
+
                 })
                 .FirstOrDefaultAsync();
 

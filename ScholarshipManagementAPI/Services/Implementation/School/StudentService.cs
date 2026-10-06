@@ -191,6 +191,93 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 throw new UnauthorizedAccessException();
             }
 
+            // ---------------------------------------------------------
+            // Check whether student already has an active application
+            // ---------------------------------------------------------
+
+            var activeStatuses = new[]
+            {
+        (int)StudentApplicationStatus.Draft,
+        (int)StudentApplicationStatus.AcceptanceInProcess,
+        (int)StudentApplicationStatus.Sponsored,
+        (int)StudentApplicationStatus.Awarded,
+        (int)StudentApplicationStatus.Registered
+    };
+
+            bool hasActiveApplication = await _context.KfStudentProgramApplications
+                .AnyAsync(x =>
+                    x.StudentId == entity.StudentId &&
+                    activeStatuses.Contains(x.ApplicationStatus));
+
+            if (hasActiveApplication)
+            {
+                // Academic Information
+                bool academicInformationChanged =
+                    entity.HsSpecialization != dto.HsSpecialization ||
+                    entity.TanzanianStudentCombination != dto.TanzanianStudentCombination ||
+                    entity.TotalScore != dto.TotalScore ||
+                    entity.MaxScore != dto.MaxScore ||
+                    entity.RelativeGrade != dto.RelativeGrade ||
+                    entity.EnglishScore != dto.EnglishScore;
+
+                // Transfer Information
+                var dtoTransferLastSemEnd = dto.TransferLastSemEnd.HasValue
+                    ? DateOnly.FromDateTime(dto.TransferLastSemEnd.Value)
+                    : (DateOnly?)null;
+
+                bool transferInformationChanged =
+                    entity.TransferInstitution != dto.TransferInstitution ||
+                    entity.TransferProgram != dto.TransferProgram ||
+                    entity.TransferInstitutionType != dto.TransferInstitutionType ||
+                    entity.TransferCredits != dto.TransferCredits ||
+                    entity.TransferLastSemEnd != dtoTransferLastSemEnd ||
+                    entity.TransferGpa != dto.TransferGpa;
+
+                // Behavioral & Social Evaluation
+                bool evaluationInformationChanged =
+                    entity.FinancialNeedStatusId != dto.FinancialNeedStatusId ||
+                    entity.SelfRelianceLevelId != dto.SelfRelianceLevelId ||
+                    entity.MotivationLevelId != dto.MotivationLevelId ||
+                    entity.FutureGoalsLevelId != dto.FutureGoalsLevelId;
+
+                // Recommendation
+                bool recommendationInformationChanged =
+                    entity.RecommendationLetterPath != dto.RecommendationLetterPath ||
+                    entity.RecommendationLetterNotes != dto.RecommendationLetterNotes;
+
+                if (academicInformationChanged)
+                {
+                    throw new CustomException(
+                        "Student has an active program application. Academic information cannot be changed."
+                    );
+                }
+
+                if (transferInformationChanged)
+                {
+                    throw new CustomException(
+                        "Student has an active program application. Transfer information cannot be changed."
+                    );
+                }
+
+                if (evaluationInformationChanged)
+                {
+                    throw new CustomException(
+                        "Student has an active program application. Behavioral and social evaluation information cannot be changed."
+                    );
+                }
+
+                if (recommendationInformationChanged)
+                {
+                    throw new CustomException(
+                        "Student has an active program application. Recommendation information cannot be changed."
+                    );
+                }
+            }
+
+            // ---------------------------------------------------------
+            // Update Student Information
+            // ---------------------------------------------------------
+
             entity.PhotoPath = dto.PhotoPath;
 
             //entity.StudentCode = dto.StudentCode;
