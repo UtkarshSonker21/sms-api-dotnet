@@ -33,6 +33,10 @@ public partial class KfStudentAcademicRegistration
 
     public virtual KfUsersLogin CreatedByNavigation { get; set; } = null!;
 
+    public virtual ICollection<KfStudentCourseEnrollment> KfStudentCourseEnrollments { get; set; } = new List<KfStudentCourseEnrollment>();
+
+    public virtual KfStudentSemesterResult? KfStudentSemesterResult { get; set; }
+
     public virtual KfProgram Program { get; set; } = null!;
 
     public virtual KfProgramSemester? ProgramSemester { get; set; }

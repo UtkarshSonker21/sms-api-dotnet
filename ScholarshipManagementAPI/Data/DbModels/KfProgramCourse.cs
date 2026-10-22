@@ -33,6 +33,8 @@ public partial class KfProgramCourse
 
     public virtual KfCourse Course { get; set; } = null!;
 
+    public virtual ICollection<KfStudentCourseEnrollment> KfStudentCourseEnrollments { get; set; } = new List<KfStudentCourseEnrollment>();
+
     public virtual KfProgram Program { get; set; } = null!;
 
     public virtual KfProgramSemester? ProgramSemester { get; set; }

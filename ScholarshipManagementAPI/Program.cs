@@ -238,6 +238,7 @@ builder.Services.AddScoped<IStudentCategoryService, StudentCategoryService>();
 builder.Services.AddScoped<IProgramsService, ProgramsService>();
 builder.Services.AddScoped<IMarketingAdministrativeFeeService, MarketingAdministrativeFeeService>();
 builder.Services.AddScoped<IProgramRegistrationWindowService, ProgramRegistrationWindowService>();
+builder.Services.AddScoped<IUniversityAcademicCalendarService, UniversityAcademicCalendarService>();
 builder.Services.AddScoped<IStudentAcademicRegistrationService, StudentAcademicRegistrationService>();
 builder.Services.AddScoped<IPanelUsersService, PanelUsersService>();
 builder.Services.AddScoped<IUniversityCoordinatorService, UniversityCoordinatorService>();

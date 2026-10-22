@@ -54,6 +54,10 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<KfStudentAcademicRegistration> KfStudentAcademicRegistrations { get; set; }
 
+    public virtual DbSet<KfStudentCourseEnrollment> KfStudentCourseEnrollments { get; set; }
+
+    public virtual DbSet<KfStudentCourseResult> KfStudentCourseResults { get; set; }
+
     public virtual DbSet<KfStudentHistory> KfStudentHistories { get; set; }
 
     public virtual DbSet<KfStudentProgramApplication> KfStudentProgramApplications { get; set; }
@@ -62,7 +66,13 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<KfStudentRegistration> KfStudentRegistrations { get; set; }
 
+    public virtual DbSet<KfStudentSemesterResult> KfStudentSemesterResults { get; set; }
+
     public virtual DbSet<KfUniversity> KfUniversities { get; set; }
+
+    public virtual DbSet<KfUniversityAcademicCalendar> KfUniversityAcademicCalendars { get; set; }
+
+    public virtual DbSet<KfUniversityAcademicTerm> KfUniversityAcademicTerms { get; set; }
 
     public virtual DbSet<KfUsersLogin> KfUsersLogins { get; set; }
 
@@ -95,6 +105,7 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<ZzMasterCurrency> ZzMasterCurrencies { get; set; }
 
     public virtual DbSet<ZzMasterDropdown> ZzMasterDropdowns { get; set; }
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -662,6 +673,63 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("FK_kf_student_academic_registrations_UpdatedBy");
         });
 
+        modelBuilder.Entity<KfStudentCourseEnrollment>(entity =>
+        {
+            entity.ToTable("kf_student_course_enrollments");
+
+            entity.HasIndex(e => new { e.AcademicRegistrationId, e.ProgramCourseId }, "UQ_kf_student_course_enrollments_Registration_Course").IsUnique();
+
+            entity.Property(e => e.CreatedOn).HasDefaultValueSql("(sysutcdatetime())");
+
+            entity.HasOne(d => d.AcademicRegistration).WithMany(p => p.KfStudentCourseEnrollments)
+                .HasForeignKey(d => d.AcademicRegistrationId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_course_enrollments_Registration");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.KfStudentCourseEnrollmentCreatedByNavigations)
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_course_enrollments_CreatedBy");
+
+            entity.HasOne(d => d.ProgramCourse).WithMany(p => p.KfStudentCourseEnrollments)
+                .HasForeignKey(d => d.ProgramCourseId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_course_enrollments_ProgramCourse");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.KfStudentCourseEnrollmentUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK_kf_student_course_enrollments_UpdatedBy");
+        });
+
+        modelBuilder.Entity<KfStudentCourseResult>(entity =>
+        {
+            entity.ToTable("kf_student_course_results");
+
+            entity.HasIndex(e => e.StudentCourseEnrollmentId, "UQ_kf_student_course_results_Enrollment").IsUnique();
+
+            entity.Property(e => e.CreatedOn).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.Grade).HasMaxLength(20);
+            entity.Property(e => e.Remarks).HasMaxLength(1000);
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.KfStudentCourseResultCreatedByNavigations)
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_course_results_CreatedBy");
+
+            entity.HasOne(d => d.RecordedByNavigation).WithMany(p => p.KfStudentCourseResultRecordedByNavigations)
+                .HasForeignKey(d => d.RecordedBy)
+                .HasConstraintName("FK_kf_student_course_results_RecordedBy");
+
+            entity.HasOne(d => d.StudentCourseEnrollment).WithOne(p => p.KfStudentCourseResult)
+                .HasForeignKey<KfStudentCourseResult>(d => d.StudentCourseEnrollmentId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_course_results_Enrollment");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.KfStudentCourseResultUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK_kf_student_course_results_UpdatedBy");
+        });
+
         modelBuilder.Entity<KfStudentHistory>(entity =>
         {
             entity.HasKey(e => e.StudentHistoryId);
@@ -837,6 +905,39 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("FK_kf_student_registrations_UpdatedBy");
         });
 
+        modelBuilder.Entity<KfStudentSemesterResult>(entity =>
+        {
+            entity.ToTable("kf_student_semester_results");
+
+            entity.HasIndex(e => e.AcademicRegistrationId, "UQ_kf_student_semester_results_Registration").IsUnique();
+
+            entity.Property(e => e.CreatedOn).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.SemesterGpa)
+                .HasColumnType("decimal(5, 2)")
+                .HasColumnName("SemesterGPA");
+            entity.Property(e => e.SubmissionStatus)
+                .HasMaxLength(20)
+                .HasDefaultValue("Draft");
+
+            entity.HasOne(d => d.AcademicRegistration).WithOne(p => p.KfStudentSemesterResult)
+                .HasForeignKey<KfStudentSemesterResult>(d => d.AcademicRegistrationId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_semester_results_Registration");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.KfStudentSemesterResultCreatedByNavigations)
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_semester_results_CreatedBy");
+
+            entity.HasOne(d => d.SubmittedByNavigation).WithMany(p => p.KfStudentSemesterResultSubmittedByNavigations)
+                .HasForeignKey(d => d.SubmittedBy)
+                .HasConstraintName("FK_kf_student_semester_results_SubmittedBy");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.KfStudentSemesterResultUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK_kf_student_semester_results_UpdatedBy");
+        });
+
         modelBuilder.Entity<KfUniversity>(entity =>
         {
             entity.HasKey(e => e.UniversityId).HasName("PK__UnUniver__6EF588100A965F01");
@@ -901,6 +1002,45 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.KfUniversityUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_UnUniversityRegistration_UpdatedBy_UsersLogin");
+        });
+
+        modelBuilder.Entity<KfUniversityAcademicCalendar>(entity =>
+        {
+            entity.HasKey(e => e.AcademicCalendarId);
+
+            entity.ToTable("kf_university_academic_calendars");
+
+            entity.HasIndex(e => new { e.UniversityId, e.AcademicYearName }, "UQ_kf_acal_University_Year").IsUnique();
+
+            entity.Property(e => e.AcademicYearName).HasMaxLength(40);
+            entity.Property(e => e.CreatedOn).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.NamingStyle)
+                .HasMaxLength(40)
+                .HasDefaultValue("Term");
+            entity.Property(e => e.ReusePreviousCalendar).HasDefaultValue(true);
+
+            entity.HasOne(d => d.ReusedFromCalendar).WithMany(p => p.InverseReusedFromCalendar)
+                .HasForeignKey(d => d.ReusedFromCalendarId)
+                .HasConstraintName("FK_kf_acal_PreviousCalendar");
+        });
+
+        modelBuilder.Entity<KfUniversityAcademicTerm>(entity =>
+        {
+            entity.HasKey(e => e.AcademicTermId);
+
+            entity.ToTable("kf_university_academic_terms");
+
+            entity.HasIndex(e => new { e.AcademicCalendarId, e.StartDate }, "IX_kf_aterm_Calendar_StartDate");
+
+            entity.HasIndex(e => new { e.AcademicCalendarId, e.TermSequence }, "UQ_kf_aterm_Calendar_Sequence").IsUnique();
+
+            entity.Property(e => e.CreatedOn).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.TermName).HasMaxLength(100);
+
+            entity.HasOne(d => d.AcademicCalendar).WithMany(p => p.KfUniversityAcademicTerms)
+                .HasForeignKey(d => d.AcademicCalendarId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_aterm_Calendar");
         });
 
         modelBuilder.Entity<KfUsersLogin>(entity =>

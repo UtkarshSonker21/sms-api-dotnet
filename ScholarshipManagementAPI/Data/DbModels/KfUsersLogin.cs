@@ -97,6 +97,16 @@ public partial class KfUsersLogin
 
     public virtual ICollection<KfStudentAcademicRegistration> KfStudentAcademicRegistrationUpdatedByNavigations { get; set; } = new List<KfStudentAcademicRegistration>();
 
+    public virtual ICollection<KfStudentCourseEnrollment> KfStudentCourseEnrollmentCreatedByNavigations { get; set; } = new List<KfStudentCourseEnrollment>();
+
+    public virtual ICollection<KfStudentCourseEnrollment> KfStudentCourseEnrollmentUpdatedByNavigations { get; set; } = new List<KfStudentCourseEnrollment>();
+
+    public virtual ICollection<KfStudentCourseResult> KfStudentCourseResultCreatedByNavigations { get; set; } = new List<KfStudentCourseResult>();
+
+    public virtual ICollection<KfStudentCourseResult> KfStudentCourseResultRecordedByNavigations { get; set; } = new List<KfStudentCourseResult>();
+
+    public virtual ICollection<KfStudentCourseResult> KfStudentCourseResultUpdatedByNavigations { get; set; } = new List<KfStudentCourseResult>();
+
     public virtual ICollection<KfStudentHistory> KfStudentHistories { get; set; } = new List<KfStudentHistory>();
 
     public virtual ICollection<KfStudentProgramApplication> KfStudentProgramApplicationCreatedByNavigations { get; set; } = new List<KfStudentProgramApplication>();
@@ -110,6 +120,12 @@ public partial class KfUsersLogin
     public virtual ICollection<KfStudentRegistration> KfStudentRegistrationCreatedByNavigations { get; set; } = new List<KfStudentRegistration>();
 
     public virtual ICollection<KfStudentRegistration> KfStudentRegistrationUpdatedByNavigations { get; set; } = new List<KfStudentRegistration>();
+
+    public virtual ICollection<KfStudentSemesterResult> KfStudentSemesterResultCreatedByNavigations { get; set; } = new List<KfStudentSemesterResult>();
+
+    public virtual ICollection<KfStudentSemesterResult> KfStudentSemesterResultSubmittedByNavigations { get; set; } = new List<KfStudentSemesterResult>();
+
+    public virtual ICollection<KfStudentSemesterResult> KfStudentSemesterResultUpdatedByNavigations { get; set; } = new List<KfStudentSemesterResult>();
 
     public virtual ICollection<KfUniversity> KfUniversityAccreditationByNavigations { get; set; } = new List<KfUniversity>();
 
