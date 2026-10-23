@@ -40,4 +40,6 @@ public partial class KfUniversityAcademicCalendar
     public virtual ICollection<KfUniversityAcademicTerm> KfUniversityAcademicTerms { get; set; } = new List<KfUniversityAcademicTerm>();
 
     public virtual KfUniversityAcademicCalendar? ReusedFromCalendar { get; set; }
+
+    public virtual KfUniversity University { get; set; } = null!;
 }

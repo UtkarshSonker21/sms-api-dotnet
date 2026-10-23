@@ -377,6 +377,10 @@ public partial class AppDbContext : DbContext
 
             entity.Property(e => e.SemesterName).HasMaxLength(200);
 
+            entity.HasOne(d => d.AcademicTerm).WithMany(p => p.KfProgramSemesters)
+                .HasForeignKey(d => d.AcademicTermId)
+                .HasConstraintName("FK_kf_program_semesters_kf_university_academic_terms");
+
             entity.HasOne(d => d.Program).WithMany(p => p.KfProgramSemesters)
                 .HasForeignKey(d => d.ProgramId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -1022,6 +1026,11 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.ReusedFromCalendar).WithMany(p => p.InverseReusedFromCalendar)
                 .HasForeignKey(d => d.ReusedFromCalendarId)
                 .HasConstraintName("FK_kf_acal_PreviousCalendar");
+
+            entity.HasOne(d => d.University).WithMany(p => p.KfUniversityAcademicCalendars)
+                .HasForeignKey(d => d.UniversityId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_acal_University");
         });
 
         modelBuilder.Entity<KfUniversityAcademicTerm>(entity =>
@@ -1029,8 +1038,6 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.AcademicTermId);
 
             entity.ToTable("kf_university_academic_terms");
-
-            entity.HasIndex(e => new { e.AcademicCalendarId, e.StartDate }, "IX_kf_aterm_Calendar_StartDate");
 
             entity.HasIndex(e => new { e.AcademicCalendarId, e.TermSequence }, "UQ_kf_aterm_Calendar_Sequence").IsUnique();
 

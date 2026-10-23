@@ -68,5 +68,7 @@ namespace ScholarshipManagementAPI.DTOs.University.Programs
         public List<ProgramCostDto>? Costs { get; set; }
 
         public List<ProgramCourseDto>? Courses { get; set; }
+
+        public List<ProgramSemesterDto>? Semesters { get; set; }
     }
 }

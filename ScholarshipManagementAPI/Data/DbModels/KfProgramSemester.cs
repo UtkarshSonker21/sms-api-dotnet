@@ -29,6 +29,10 @@ public partial class KfProgramSemester
 
     public DateTime? UpdatedOn { get; set; }
 
+    public long? AcademicTermId { get; set; }
+
+    public virtual KfUniversityAcademicTerm? AcademicTerm { get; set; }
+
     public virtual ICollection<KfProgramCourse> KfProgramCourses { get; set; } = new List<KfProgramCourse>();
 
     public virtual ICollection<KfStudentAcademicRegistration> KfStudentAcademicRegistrations { get; set; } = new List<KfStudentAcademicRegistration>();

@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ScholarshipManagementAPI.Data.Contexts;
+using System.Data;
 using ScholarshipManagementAPI.Data.DbModels;
 using ScholarshipManagementAPI.DTOs.Common.Auth;
 using ScholarshipManagementAPI.DTOs.Common.Response;
@@ -181,6 +182,19 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
 
                 await _context.SaveChangesAsync();
 
+                var programSemesters = Enumerable.Range(1, dto.NumberOfSemesters)
+                    .Select(semesterNo => CreateProgramSemester(
+                        entity.ProgramId,
+                        semesterNo,
+                        dto.CreatedBy))
+                    .ToList();
+
+                _context.KfProgramSemesters.AddRange(programSemesters);
+                await _context.SaveChangesAsync();
+
+                var semesterIdsByNumber = programSemesters
+                    .ToDictionary(x => x.SemesterNo, x => x.ProgramSemesterId);
+
                 // Program Documents ---------------------------------------
 
                 if (dto.Documents?.Any() == true)
@@ -226,7 +240,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                             CourseType = x.CourseType,
                             Credits = x.Credits,
                             DisplayOrder = x.DisplayOrder,
-                            SemesterNo = x.SemesterNo
+                            SemesterNo = x.SemesterNo,
+                            ProgramSemesterId = semesterIdsByNumber[x.SemesterNo]
                         })
                         .ToList();
 
@@ -253,7 +268,9 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
             if (dto.ProgramId == null || dto.ProgramId == 0)
                 return false;
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            // Serialize edits to one program's semester schedule so concurrent updates
+            // cannot assign the same academic term to different semester numbers.
+            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
             try
             {
@@ -387,6 +404,11 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     throw new CustomException("Accredited program cannot be modified");
                 }
 
+                var semesterIdsByNumber = await EnsureProgramSemestersAsync(
+                    entity,
+                    dto.NumberOfSemesters,
+                    dto.UpdatedBy ?? entity.CreatedBy);
+
                 var oldStatus = entity.AccreditationStatus;
                 var wasDraft = entity.IsDraft;
 
@@ -482,7 +504,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                             CourseType = x.CourseType,
                             Credits = x.Credits,
                             DisplayOrder = x.DisplayOrder,
-                            SemesterNo = x.SemesterNo
+                            SemesterNo = x.SemesterNo,
+                            ProgramSemesterId = semesterIdsByNumber[x.SemesterNo]
                         })
                         .ToList();
 
@@ -533,26 +556,32 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     );
                 }
 
-                // Delete program documents
-                var documents = await _context.KfProgramDocuments
-                    .Where(x => x.ProgramId == id)
-                    .ToListAsync();
+                var hasAcademicHistory = await _context.KfStudentAcademicRegistrations
+                    .AnyAsync(x => x.ProgramId == id);
+                var hasCourseEnrollments = await _context.KfProgramCourses
+                    .AnyAsync(x => x.ProgramId == id && x.KfStudentCourseEnrollments.Any());
+                var hasStudentDocumentReferences = await _context.KfProgramDocuments
+                    .AnyAsync(x => x.ProgramId == id && x.KfStudentProgramDocuments.Any());
 
-                _context.KfProgramDocuments.RemoveRange(documents);
+                // Keep the semester schedule permanently. Retain its supporting
+                // curriculum records too when academic or document history depends on them.
+                if (!hasAcademicHistory && !hasCourseEnrollments && !hasStudentDocumentReferences)
+                {
+                    var documents = await _context.KfProgramDocuments
+                        .Where(x => x.ProgramId == id)
+                        .ToListAsync();
+                    _context.KfProgramDocuments.RemoveRange(documents);
 
-                // Delete program costs
-                var costs = await _context.KfProgramCosts
-                    .Where(x => x.ProgramId == id)
-                    .ToListAsync();
+                    var costs = await _context.KfProgramCosts
+                        .Where(x => x.ProgramId == id)
+                        .ToListAsync();
+                    _context.KfProgramCosts.RemoveRange(costs);
 
-                _context.KfProgramCosts.RemoveRange(costs);
-
-                // Delete program courses
-                var courses = await _context.KfProgramCourses
-                    .Where(x => x.ProgramId == id)
-                    .ToListAsync();
-
-                _context.KfProgramCourses.RemoveRange(courses);
+                    var courses = await _context.KfProgramCourses
+                        .Where(x => x.ProgramId == id)
+                        .ToListAsync();
+                    _context.KfProgramCourses.RemoveRange(courses);
+                }
 
                 // Soft delete program
                 entity.IsActive = false;
@@ -598,7 +627,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                 query = query.Where(x => x.AccreditationStatus == (byte)AccreditationStatusEnum.Accredited);
             }
 
-            return await query
+            var program = await query
                 .Select(x => new ProgramRequestDto
                 {
                     ProgramId = x.ProgramId,
@@ -676,11 +705,28 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                             Credits = c.Credits,
                             DisplayOrder = c.DisplayOrder,
                             SemesterNo = c.SemesterNo,
-                            SemesterName = $"Semester {c.SemesterNo}"
+                            SemesterName = c.ProgramSemester != null && c.ProgramSemester.SemesterName != null
+                                ? c.ProgramSemester.SemesterName
+                                : $"Semester {c.SemesterNo}"
                         })
                         .ToList()
                 })
                 .FirstOrDefaultAsync();
+
+            if (program != null)
+            {
+                var semesters = await _context.KfProgramSemesters
+                    .AsNoTracking()
+                    .Where(x => x.ProgramId == id)
+                    .Include(x => x.AcademicTerm)
+                        .ThenInclude(x => x!.AcademicCalendar)
+                    .OrderBy(x => x.SemesterNo)
+                    .ToListAsync();
+
+                program.Semesters = semesters.Select(MapProgramSemester).ToList();
+            }
+
+            return program;
         }
 
 
@@ -797,6 +843,30 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                 })
                 .ToListAsync();
 
+            if (items.Count > 0)
+            {
+                var programIds = items.Select(x => x.ProgramId!.Value).ToList();
+                var programSemesters = await _context.KfProgramSemesters
+                    .AsNoTracking()
+                    .Where(x => programIds.Contains(x.ProgramId))
+                    .Include(x => x.AcademicTerm)
+                        .ThenInclude(x => x!.AcademicCalendar)
+                    .OrderBy(x => x.SemesterNo)
+                    .ToListAsync();
+
+                var semestersByProgram = programSemesters
+                    .GroupBy(x => x.ProgramId)
+                    .ToDictionary(x => x.Key, x => x.Select(MapProgramSemester).ToList());
+
+                foreach (var item in items)
+                {
+                    if (item.ProgramId.HasValue && semestersByProgram.TryGetValue(item.ProgramId.Value, out var semesters))
+                        item.Semesters = semesters;
+                    else
+                        item.Semesters = new List<ProgramSemesterDto>();
+                }
+            }
+
             return new PagedResultDto<ProgramRequestDto>
             {
                 Items = items,
@@ -806,7 +876,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
             };
         }
 
-
+        // ---------------- GET All Semesters ----------------
         public async Task<List<ProgramSemesterDto>> GetSemestersAsync(long programId, LoggedInUserDto currentUser)
         {
             var query = _context.KfPrograms
@@ -833,10 +903,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
             }
 
             var program = await query
-                .Select(x => new
-                {
-                    x.NumberOfSemesters
-                })
+                .Select(x => new { x.ProgramId, x.UniversityId, x.NumberOfSemesters })
                 .FirstOrDefaultAsync();
 
             if (program == null)
@@ -844,22 +911,456 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                 throw new CustomException("Program not found");
             }
 
-            var semesters = new List<ProgramSemesterDto>();
+            var semesters = await _context.KfProgramSemesters
+                .AsNoTracking()
+                .Where(x => x.ProgramId == program.ProgramId)
+                .Include(x => x.AcademicTerm)
+                    .ThenInclude(x => x!.AcademicCalendar)
+                .OrderBy(x => x.SemesterNo)
+                .ToListAsync();
 
-            for (int i = 1; i <= program.NumberOfSemesters; i++)
+            return semesters.Select(MapProgramSemester).ToList();
+        }
+
+        public async Task<List<ProgramSemesterDto>> GetSemesterDefaultsAsync(
+            long programId,
+            long academicCalendarId,
+            LoggedInUserDto currentUser)
+        {
+            if (currentUser.StaffType != StaffType.University || !currentUser.UniversityIds.Any())
+                throw new UnauthorizedAccessException("University access is required to generate program semester dates.");
+
+            var program = await _context.KfPrograms
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.ProgramId == programId && x.IsActive &&
+                    currentUser.UniversityIds.Contains(x.UniversityId));
+
+            if (program == null)
+                throw new CustomException("Program not found.");
+
+            return await GenerateProgramSemesterDefaultsAsync(
+                program.ProgramId,
+                program.UniversityId,
+                program.NumberOfSemesters,
+                academicCalendarId);
+        }
+
+
+        public async Task<bool> SaveSemestersAsync(
+            long programId,
+            List<ProgramSemesterDto> requestedSemesters,
+            LoggedInUserDto currentUser,
+            long? academicCalendarId = null)
+        {
+            if (currentUser.StaffType != StaffType.University || !currentUser.UniversityIds.Any())
+                throw new UnauthorizedAccessException("University access is required.");
+
+            if (requestedSemesters == null)
+                throw new CustomException("Program semester details are required.");
+
+            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
             {
-                semesters.Add(new ProgramSemesterDto
-                {
-                    SemesterNo = i,
-                    SemesterName = $"Semester {i}"
-                });
-            }
+                var program = await _context.KfPrograms.FirstOrDefaultAsync(x =>
+                    x.ProgramId == programId && currentUser.UniversityIds.Contains(x.UniversityId));
 
-            return semesters;
+                if (program == null)
+                    throw new CustomException("Program not found.");
+
+                if (program.AccreditationStatus == (byte)AccreditationStatusEnum.Pending)
+                    throw new CustomException("Program is under accreditation review.");
+
+                if (program.AccreditationStatus == (byte)AccreditationStatusEnum.Accredited)
+                    throw new CustomException("Accredited program cannot be modified.");
+
+                if (program.NumberOfSemesters <= 0 || requestedSemesters.Count != program.NumberOfSemesters)
+                    throw new CustomException("The schedule must include every semester configured for this program.");
+
+                var generatedDefaults = academicCalendarId.HasValue
+                    ? await GenerateProgramSemesterDefaultsAsync(
+                        program.ProgramId,
+                        program.UniversityId,
+                        program.NumberOfSemesters,
+                        academicCalendarId.Value)
+                    : new List<ProgramSemesterDto>();
+                var defaultsByNumber = generatedDefaults.ToDictionary(x => x.SemesterNo);
+
+                var duplicateSemesterNumbers = requestedSemesters
+                    .GroupBy(x => x.SemesterNo)
+                    .Any(x => x.Count() > 1);
+                if (duplicateSemesterNumbers || requestedSemesters.Any(x => x.SemesterNo < 1 || x.SemesterNo > program.NumberOfSemesters))
+                    throw new CustomException("Each configured semester must be included exactly once.");
+
+                var semesterIdsByNumber = await EnsureProgramSemestersAsync(
+                    program,
+                    program.NumberOfSemesters,
+                    currentUser.LoginId);
+
+                if (semesterIdsByNumber.Count < program.NumberOfSemesters)
+                    throw new CustomException("The program semester schedule could not be prepared.");
+
+                var persistedSemesters = await _context.KfProgramSemesters
+                    .Where(x => x.ProgramId == programId)
+                    .ToListAsync();
+                var persistedByNumber = persistedSemesters.ToDictionary(x => x.SemesterNo);
+
+                foreach (var request in requestedSemesters)
+                {
+                    if (!persistedByNumber.TryGetValue(request.SemesterNo, out var semester))
+                        throw new CustomException($"Program semester {request.SemesterNo} was not found.");
+
+                    var expectedId = semesterIdsByNumber[request.SemesterNo];
+                    if (request.ProgramSemesterId > 0 && request.ProgramSemesterId != expectedId)
+                        throw new CustomException("A submitted program semester does not match this program.");
+
+                    if (!request.StartDate.HasValue || !request.EndDate.HasValue ||
+                        !request.RegistrationStartDate.HasValue || !request.RegistrationEndDate.HasValue)
+                        throw new CustomException($"All four dates are required for program semester {request.SemesterNo}.");
+
+                    if (request.StartDate.Value == DateTime.MinValue || request.EndDate.Value == DateTime.MinValue ||
+                        request.RegistrationStartDate.Value == DateTime.MinValue ||
+                        request.RegistrationEndDate.Value == DateTime.MinValue)
+                        throw new CustomException($"All four dates must be valid for program semester {request.SemesterNo}.");
+
+                    if (request.StartDate > request.EndDate)
+                        throw new CustomException($"Program semester {request.SemesterNo} start date must be on or before its end date.");
+
+                    if (request.RegistrationStartDate > request.RegistrationEndDate)
+                        throw new CustomException($"Program semester {request.SemesterNo} registration start date must be on or before its end date.");
+
+                    semester.StartDate = request.StartDate.Value;
+                    semester.EndDate = request.EndDate.Value;
+                    semester.RegistrationStartDate = request.RegistrationStartDate.Value;
+                    semester.RegistrationEndDate = request.RegistrationEndDate.Value;
+                    if (defaultsByNumber.TryGetValue(request.SemesterNo, out var defaults))
+                    {
+                        semester.SemesterName = defaults.SemesterName;
+                        if (!semester.AcademicTermId.HasValue && defaults.AcademicTermId.HasValue)
+                            semester.AcademicTermId = defaults.AcademicTermId;
+                    }
+                    semester.UpdatedBy = currentUser.LoginId;
+                    semester.UpdatedOn = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return true;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
 
 
+        // ---------------- PRIVATE get university academic terms ----------------
+        private async Task<List<KfUniversityAcademicTerm>> GetUniversityAcademicTermsAsync(long universityId)
+        {
+            return await _context.KfUniversityAcademicTerms
+                .AsNoTracking()
+                .Where(x => x.AcademicCalendar.UniversityId == universityId)
+                .OrderBy(x => x.AcademicCalendar.PeriodStartDate)
+                .ThenBy(x => x.AcademicCalendar.PeriodEndDate)
+                .ThenBy(x => x.TermSequence)
+                .ThenBy(x => x.AcademicTermId)
+                .ToListAsync();
+        }
+
+
+        // ---------------- PRIVATE ensure program semesters in update ----------------
+        private async Task<Dictionary<int, long>> EnsureProgramSemestersAsync(
+            KfProgram program,
+            int numberOfSemesters,
+            long actorId)
+        {
+            if (numberOfSemesters <= 0)
+                throw new CustomException("Number of semesters must be greater than 0.");
+
+            var terms = await GetUniversityAcademicTermsAsync(program.UniversityId);
+
+            var termOrder = terms
+                .Select((term, index) => new { term.AcademicTermId, Index = index })
+                .ToDictionary(x => x.AcademicTermId, x => x.Index);
+            var semesters = await _context.KfProgramSemesters
+                .Where(x => x.ProgramId == program.ProgramId)
+                .OrderBy(x => x.SemesterNo)
+                .ToListAsync();
+
+            if (semesters.GroupBy(x => x.SemesterNo).Any(x => x.Count() > 1))
+                throw new CustomException("Duplicate program semester records were found.");
+
+            if (semesters.Any(x => x.SemesterNo < 1))
+                throw new CustomException("A program semester has an invalid semester number.");
+
+            var usedTerms = new HashSet<long>();
+            var priorMappedTermIndex = -1;
+            foreach (var semester in semesters.Where(x => x.AcademicTermId.HasValue))
+            {
+                var academicTermId = semester.AcademicTermId!.Value;
+                if (!termOrder.TryGetValue(academicTermId, out var index))
+                {
+                    throw new CustomException(
+                        $"Program semester {semester.SemesterNo} is mapped to an academic term that does not belong to this program's university.");
+                }
+
+                if (!usedTerms.Add(academicTermId))
+                    throw new CustomException("An academic term is mapped to more than one program semester.");
+
+                if (index <= priorMappedTermIndex)
+                {
+                    throw new CustomException(
+                        "Existing program semester mappings are not in chronological order and cannot be changed automatically.");
+                }
+
+                priorMappedTermIndex = index;
+            }
+
+            var semestersByNumber = semesters.ToDictionary(x => x.SemesterNo);
+            var newSemesters = new List<KfProgramSemester>();
+
+            for (var semesterNo = 1; semesterNo <= numberOfSemesters; semesterNo++)
+            {
+                if (!semestersByNumber.TryGetValue(semesterNo, out var semester))
+                {
+                    semester = new KfProgramSemester
+                    {
+                        ProgramId = program.ProgramId,
+                        SemesterNo = semesterNo,
+                        SemesterName = $"Semester {semesterNo}",
+                        CreatedBy = actorId,
+                        CreatedOn = DateTime.UtcNow
+                    };
+                    newSemesters.Add(semester);
+                    semestersByNumber[semesterNo] = semester;
+                }
+            }
+
+            if (newSemesters.Count > 0)
+                _context.KfProgramSemesters.AddRange(newSemesters);
+
+            await _context.SaveChangesAsync();
+
+            return semestersByNumber.ToDictionary(x => x.Key, x => x.Value.ProgramSemesterId);
+        }
+
+        private async Task<List<ProgramSemesterDto>> GenerateProgramSemesterDefaultsAsync(
+            long programId,
+            long universityId,
+            int numberOfSemesters,
+            long academicCalendarId)
+        {
+            if (numberOfSemesters <= 0)
+                throw new CustomException("Number of semesters must be greater than 0.");
+
+            var calendar = await _context.KfUniversityAcademicCalendars
+                .AsNoTracking()
+                .Include(x => x.KfUniversityAcademicTerms)
+                .FirstOrDefaultAsync(x => x.AcademicCalendarId == academicCalendarId && x.UniversityId == universityId);
+
+            if (calendar == null)
+                throw new CustomException("The selected academic calendar was not found for this university.");
+            if (calendar.TermsPerYear is not (2 or 3 or 4))
+                throw new CustomException("The selected academic calendar must have 2, 3, or 4 terms per year.");
+            if (calendar.PeriodStartDate == DateOnly.MinValue || calendar.PeriodEndDate == DateOnly.MinValue ||
+                calendar.PeriodStartDate > calendar.PeriodEndDate)
+                throw new CustomException("The selected academic calendar has an invalid academic period.");
+            if (calendar.AcademicYearStartMonth is < 1 or > 12 || calendar.AcademicYearEndMonth is < 1 or > 12 ||
+                calendar.PeriodStartDate.Month != calendar.AcademicYearStartMonth ||
+                calendar.PeriodEndDate.Month != calendar.AcademicYearEndMonth)
+                throw new CustomException("The selected academic calendar period dates must match its configured start and end months.");
+
+            var configuredTerms = calendar.KfUniversityAcademicTerms.OrderBy(x => x.TermSequence).ToList();
+            if (configuredTerms.Count != calendar.TermsPerYear ||
+                configuredTerms.Select(x => x.TermSequence).Distinct().Count() != calendar.TermsPerYear ||
+                configuredTerms.Where((term, index) => term.TermSequence != index + 1).Any() ||
+                configuredTerms.Any(x => string.IsNullOrWhiteSpace(x.TermName)))
+                throw new CustomException("The selected academic calendar does not have a complete ordered term configuration.");
+
+            var existingSemesterRows = await _context.KfProgramSemesters
+                .AsNoTracking()
+                .Include(x => x.AcademicTerm)
+                    .ThenInclude(x => x!.AcademicCalendar)
+                .Where(x => x.ProgramId == programId)
+                .ToListAsync();
+            if (existingSemesterRows.GroupBy(x => x.SemesterNo).Any(x => x.Count() > 1))
+                throw new CustomException("Duplicate program semester records were found.");
+            var existingSemesters = existingSemesterRows.ToDictionary(x => x.SemesterNo);
+            var universityTerms = await GetUniversityAcademicTermsAsync(universityId);
+            var termOrder = universityTerms
+                .Select((term, index) => new { term.AcademicTermId, Index = index })
+                .ToDictionary(x => x.AcademicTermId, x => x.Index);
+            var usedTermIds = new HashSet<long>();
+            var lastMappedTermIndex = -1;
+
+            foreach (var existing in existingSemesterRows.Where(x => x.AcademicTermId.HasValue).OrderBy(x => x.SemesterNo))
+            {
+                if (!termOrder.TryGetValue(existing.AcademicTermId!.Value, out var index))
+                    throw new CustomException($"Program semester {existing.SemesterNo} is linked to a calendar outside this university.");
+                if (!usedTermIds.Add(existing.AcademicTermId.Value))
+                    throw new CustomException("An academic term is mapped to more than one program semester.");
+                if (index <= lastMappedTermIndex)
+                    throw new CustomException("Existing program semester mappings are not in chronological order.");
+                lastMappedTermIndex = index;
+            }
+            lastMappedTermIndex = -1;
+
+            var otherCalendars = await _context.KfUniversityAcademicCalendars
+                .AsNoTracking()
+                .Include(x => x.KfUniversityAcademicTerms)
+                .Where(x => x.UniversityId == universityId && x.AcademicCalendarId != academicCalendarId)
+                .OrderBy(x => x.PeriodStartDate)
+                .ThenBy(x => x.AcademicCalendarId)
+                .ToListAsync();
+
+            var result = new List<ProgramSemesterDto>(numberOfSemesters);
+            var termsPerYear = calendar.TermsPerYear;
+
+            for (var semesterNo = 1; semesterNo <= numberOfSemesters; semesterNo++)
+            {
+                var cycle = (semesterNo - 1) / termsPerYear;
+                var termSequence = (byte)(((semesterNo - 1) % termsPerYear) + 1);
+                DateOnly periodStart;
+                DateOnly periodEnd;
+                DateOnly startDate;
+                DateOnly endDate;
+                DateTime registrationStart;
+                DateTime registrationEnd;
+                try
+                {
+                    periodStart = calendar.PeriodStartDate.AddYears(cycle);
+                    periodEnd = calendar.PeriodEndDate.AddYears(cycle);
+                    if (cycle > 0 && periodStart <= calendar.PeriodEndDate.AddYears(cycle - 1))
+                        throw new CustomException("The selected academic calendar periods would overlap when repeated across program years.");
+                    var periodLength = periodEnd.DayNumber - periodStart.DayNumber + 1;
+                    if (periodLength < termsPerYear)
+                        throw new CustomException("The academic calendar period is too short to create non-empty terms.");
+
+                    var termStartOffset = (termSequence - 1) * periodLength / termsPerYear;
+                    var termEndOffsetExclusive = termSequence * periodLength / termsPerYear;
+                    startDate = periodStart.AddDays(termStartOffset);
+                    endDate = periodStart.AddDays(termEndOffsetExclusive - 1);
+                    registrationStart = startDate.ToDateTime(TimeOnly.MinValue).AddMonths(-1);
+                    registrationEnd = startDate.ToDateTime(TimeOnly.MinValue).AddDays(-1);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    throw new CustomException("The selected academic calendar cannot cover the configured program duration.");
+                }
+
+                var sourceTerm = configuredTerms[termSequence - 1];
+
+                KfUniversityAcademicCalendar? occurrenceCalendar = null;
+                if (cycle == 0)
+                {
+                    occurrenceCalendar = calendar;
+                }
+                else
+                {
+                    occurrenceCalendar = otherCalendars.FirstOrDefault(x =>
+                        x.PeriodStartDate == periodStart &&
+                        x.PeriodEndDate == periodEnd &&
+                        x.TermsPerYear == termsPerYear);
+                }
+
+                var occurrenceTerm = occurrenceCalendar?.KfUniversityAcademicTerms
+                    .FirstOrDefault(x => x.TermSequence == termSequence &&
+                        string.Equals(x.TermName.Trim(), sourceTerm.TermName.Trim(), StringComparison.OrdinalIgnoreCase));
+                existingSemesters.TryGetValue(semesterNo, out var existing);
+
+                if (existing?.AcademicTerm != null && existing.AcademicTerm.AcademicCalendar.UniversityId != universityId)
+                    throw new CustomException($"Program semester {semesterNo} is linked to a calendar outside this university.");
+
+                long? generatedTermId = existing?.AcademicTermId;
+                if (generatedTermId.HasValue)
+                    lastMappedTermIndex = termOrder[generatedTermId.Value];
+                if (!generatedTermId.HasValue && occurrenceTerm != null &&
+                    termOrder.TryGetValue(occurrenceTerm.AcademicTermId, out var candidateTermIndex) &&
+                    candidateTermIndex > lastMappedTermIndex && !usedTermIds.Contains(occurrenceTerm.AcademicTermId))
+                {
+                    var nextMappedTermIndex = existingSemesterRows
+                        .Where(x => x.SemesterNo > semesterNo && x.AcademicTermId.HasValue)
+                        .Select(x => termOrder[x.AcademicTermId!.Value])
+                        .DefaultIfEmpty(int.MaxValue)
+                        .Min();
+
+                    if (candidateTermIndex < nextMappedTermIndex)
+                    {
+                        generatedTermId = occurrenceTerm.AcademicTermId;
+                        usedTermIds.Add(occurrenceTerm.AcademicTermId);
+                        lastMappedTermIndex = candidateTermIndex;
+                    }
+                }
+
+                var defaultName = string.Equals(calendar.NamingStyle, "Custom", StringComparison.OrdinalIgnoreCase)
+                    ? $"{sourceTerm.TermName.Trim()} {startDate.Year}"
+                    : $"Semester {semesterNo}";
+
+                result.Add(new ProgramSemesterDto
+                {
+                    ProgramSemesterId = existing?.ProgramSemesterId ?? 0,
+                    SemesterNo = semesterNo,
+                    SemesterName = defaultName,
+                    AcademicTermId = existing?.AcademicTermId ?? generatedTermId,
+                    AcademicCalendarId = existing?.AcademicTerm?.AcademicCalendarId ?? (generatedTermId.HasValue ? occurrenceCalendar?.AcademicCalendarId : null),
+                    AcademicYearName = existing?.AcademicTerm?.AcademicCalendar.AcademicYearName ??
+                        occurrenceCalendar?.AcademicYearName ?? $"{periodStart.Year}-{periodEnd.Year}",
+                    TermSequence = existing?.AcademicTerm?.TermSequence ?? occurrenceTerm?.TermSequence ?? termSequence,
+                    TermName = existing?.AcademicTerm?.TermName ?? sourceTerm.TermName,
+                    StartDate = existing?.StartDate ?? startDate.ToDateTime(TimeOnly.MinValue),
+                    EndDate = existing?.EndDate ?? endDate.ToDateTime(TimeOnly.MinValue),
+                    RegistrationStartDate = existing?.RegistrationStartDate ?? registrationStart,
+                    RegistrationEndDate = existing?.RegistrationEndDate ?? registrationEnd
+                });
+            }
+
+            return result;
+        }
+
+
+        // ---------------- PRIVATE create program semester in create ----------------
+        private static KfProgramSemester CreateProgramSemester(
+            long programId,
+            int semesterNo,
+            long actorId)
+        {
+            var semester = new KfProgramSemester
+            {
+                ProgramId = programId,
+                SemesterNo = semesterNo,
+                SemesterName = $"Semester {semesterNo}",
+                CreatedBy = actorId,
+                CreatedOn = DateTime.UtcNow
+            };
+
+            return semester;
+        }
+
+
+        // ---------------- PRIVATE map program semester ----------------
+        private static ProgramSemesterDto MapProgramSemester(KfProgramSemester semester)
+        {
+            var term = semester.AcademicTerm;
+            return new ProgramSemesterDto
+            {
+                ProgramSemesterId = semester.ProgramSemesterId,
+                SemesterNo = semester.SemesterNo,
+                SemesterName = semester.SemesterName ?? $"Semester {semester.SemesterNo}",
+                AcademicTermId = semester.AcademicTermId,
+                AcademicCalendarId = term?.AcademicCalendarId,
+                AcademicYearName = term?.AcademicCalendar.AcademicYearName,
+                TermSequence = term?.TermSequence,
+                TermName = term?.TermName,
+                StartDate = semester.StartDate,
+                EndDate = semester.EndDate,
+                RegistrationStartDate = semester.RegistrationStartDate,
+                RegistrationEndDate = semester.RegistrationEndDate
+            };
+        }
+
+
+        // ---------------- PRIVATE validate program request ----------------
         private void ValidateProgramRequest(ProgramRequestDto dto)
         {
             // ---------------- Course Validations ----------------

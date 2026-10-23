@@ -13,14 +13,6 @@ public partial class KfUniversityAcademicTerm
 
     public string TermName { get; set; } = null!;
 
-    public DateOnly StartDate { get; set; }
-
-    public DateOnly EndDate { get; set; }
-
-    public DateOnly RegistrationStartDate { get; set; }
-
-    public DateOnly RegistrationEndDate { get; set; }
-
     public long CreatedBy { get; set; }
 
     public DateTime CreatedOn { get; set; }
@@ -30,4 +22,6 @@ public partial class KfUniversityAcademicTerm
     public DateTime? UpdatedOn { get; set; }
 
     public virtual KfUniversityAcademicCalendar AcademicCalendar { get; set; } = null!;
+
+    public virtual ICollection<KfProgramSemester> KfProgramSemesters { get; set; } = new List<KfProgramSemester>();
 }

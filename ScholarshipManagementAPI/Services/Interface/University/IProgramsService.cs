@@ -20,5 +20,9 @@ namespace ScholarshipManagementAPI.Services.Interface.University
 
         Task<List<ProgramSemesterDto>> GetSemestersAsync(long programId, LoggedInUserDto currentUser);
 
+        Task<List<ProgramSemesterDto>> GetSemesterDefaultsAsync(long programId, long academicCalendarId, LoggedInUserDto currentUser);
+
+        Task<bool> SaveSemestersAsync(long programId, List<ProgramSemesterDto> semesters, LoggedInUserDto currentUser, long? academicCalendarId = null);
+
     }
 }

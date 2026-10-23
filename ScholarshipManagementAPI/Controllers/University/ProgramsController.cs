@@ -159,6 +159,35 @@ namespace ScholarshipManagementAPI.Controllers.University
             });
         }
 
+        [HttpGet("semesters/{programId:long}/defaults")]
+        public async Task<IActionResult> GetSemesterDefaults(long programId, [FromQuery] long academicCalendarId)
+        {
+            var currentUser = await _currentUser.GetCurrentUserAsync();
+            var result = await _service.GetSemesterDefaultsAsync(programId, academicCalendarId, currentUser);
+
+            return Ok(new ApiResponseDto
+            {
+                Success = result.Count > 0,
+                Result = result,
+                Message = result.Count > 0 ? "Program semester defaults generated successfully." : "Data not found"
+            });
+        }
+
+        [HttpPut("semesters/{programId:long}")]
+        [Authorize]
+        public async Task<IActionResult> SaveSemesters(long programId, [FromBody] List<ProgramSemesterDto> semesters, [FromQuery] long? academicCalendarId = null)
+        {
+            var currentUser = await _currentUser.GetCurrentUserAsync();
+            var saved = await _service.SaveSemestersAsync(programId, semesters, currentUser, academicCalendarId);
+
+            return Ok(new ApiResponseDto
+            {
+                Success = saved,
+                Result = saved,
+                Message = "Program semester dates saved successfully."
+            });
+        }
+
 
 
     }

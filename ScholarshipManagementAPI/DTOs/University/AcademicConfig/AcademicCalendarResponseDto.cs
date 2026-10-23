@@ -11,8 +11,6 @@
         public byte AcademicYearEndMonth { get; set; }
         public byte TermsPerYear { get; set; }
         public string NamingStyle { get; set; } = string.Empty;
-        public bool ReusePreviousCalendar { get; set; }
-        public long? ReusedFromCalendarId { get; set; }
         public DateTime CreatedOn { get; set; }
         public DateTime? UpdatedOn { get; set; }
         public List<AcademicTermResponseDto> Terms { get; set; } = new();

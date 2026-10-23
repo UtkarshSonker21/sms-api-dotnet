@@ -10,8 +10,6 @@
         public byte AcademicYearEndMonth { get; set; }
         public byte TermsPerYear { get; set; }
         public string NamingStyle { get; set; } = "Term";
-        public bool ReusePreviousCalendar { get; set; } = true;
-        public long? ReusedFromCalendarId { get; set; }
         public List<AcademicTermRequestDto> Terms { get; set; } = new();
     }
 }

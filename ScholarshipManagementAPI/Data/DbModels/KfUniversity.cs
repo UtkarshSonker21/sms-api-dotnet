@@ -125,6 +125,8 @@ public partial class KfUniversity
 
     public virtual ICollection<KfStaffUniversityCoordinatorMapping> KfStaffUniversityCoordinatorMappings { get; set; } = new List<KfStaffUniversityCoordinatorMapping>();
 
+    public virtual ICollection<KfUniversityAcademicCalendar> KfUniversityAcademicCalendars { get; set; } = new List<KfUniversityAcademicCalendar>();
+
     public virtual ZzMasterDropdown? StudentsGenderType { get; set; }
 
     public virtual ZzMasterDropdown? UniversityTypeNavigation { get; set; }
