@@ -45,6 +45,17 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                 if (application.ApplicationStatus != (int)StudentApplicationStatus.Sponsored)
                     throw new CustomException("Only sponsored students can be registered.");
 
+                var now = DateTime.UtcNow;
+                var centralRegistrationOpen = await _context.KfUniversityRegistrationWindows
+                    .AsNoTracking()
+                    .AnyAsync(x => x.UniversityId == application.Program.UniversityId &&
+                                   x.IsOpen &&
+                                   x.RegistrationFrom.HasValue &&
+                                   x.RegistrationFrom.Value <= now &&
+                                   x.RegistrationTo >= now);
+                if (!centralRegistrationOpen)
+                    throw new CustomException("University registration is not currently open.");
+
                 var alreadyRegistered = await _context.KfStudentAcademicRegistrations
                     .AnyAsync(x => x.ApplicationId == dto.ApplicationId);
 

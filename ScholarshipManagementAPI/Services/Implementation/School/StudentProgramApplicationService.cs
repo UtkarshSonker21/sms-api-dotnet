@@ -79,6 +79,14 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
 
             var today = DateTime.UtcNow;
             var targetSemester = GetTargetSemester(student);
+            var centrallyOpenUniversityIds = await _context.KfUniversityRegistrationWindows
+                .AsNoTracking()
+                .Where(x => x.IsOpen &&
+                            x.RegistrationFrom.HasValue && x.RegistrationFrom.Value <= today &&
+                            x.RegistrationTo >= today)
+                .Select(x => (long)x.UniversityId)
+                .Distinct()
+                .ToHashSetAsync();
 
             var list = new List<CandidateProgramResponseDto>();
             foreach (var p in programs)
@@ -88,7 +96,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
 
                 var currentApplication = (application != null && application.ProgramId == p.ProgramId) ? application : null;
 
-                if (!IsRegistrationOpen(p, targetSemester, today))
+                if (!IsRegistrationOpen(p, targetSemester, today, centrallyOpenUniversityIds))
                     continue;
 
                 list.Add(new CandidateProgramResponseDto
@@ -329,6 +337,10 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 {
                     throw new CustomException("Only Draft applications can be submitted.");
                 }
+
+                var targetSemester = GetTargetSemester(app.Student);
+                if (!await IsRegistrationOpenAsync(app.ProgramId, app.Program.UniversityId, targetSemester, DateTime.UtcNow))
+                    throw new CustomException("Registration is not currently open for this university and program semester.");
 
                 // Validate required documents
                 var requiredDocuments = app.Program.KfProgramDocuments
@@ -1417,14 +1429,29 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
         }
 
 
-        private bool IsRegistrationOpen(KfProgram program, int semesterNo, DateTime currentDate)
+        private bool IsRegistrationOpen(KfProgram program, int semesterNo, DateTime currentDate, HashSet<long> centrallyOpenUniversityIds)
         {
-            var result = program.KfProgramRegistrationWindows.Any(r =>
+            return centrallyOpenUniversityIds.Contains(program.UniversityId) && program.KfProgramRegistrationWindows.Any(r =>
                 r.SemesterNo == semesterNo &&
                 r.RegistrationFrom <= currentDate &&
                 r.RegistrationTo >= currentDate);
+        }
 
-            return result;
+        private async Task<bool> IsRegistrationOpenAsync(long programId, long universityId, int semesterNo, DateTime currentDate)
+        {
+            var centrallyOpen = await _context.KfUniversityRegistrationWindows.AsNoTracking().AnyAsync(x =>
+                x.UniversityId == universityId &&
+                x.IsOpen &&
+                x.RegistrationFrom.HasValue && x.RegistrationFrom.Value <= currentDate &&
+                x.RegistrationTo >= currentDate);
+            if (!centrallyOpen)
+                return false;
+
+            return await _context.KfProgramRegistrationWindows.AsNoTracking().AnyAsync(x =>
+                x.ProgramId == programId &&
+                x.SemesterNo == semesterNo &&
+                x.RegistrationFrom <= currentDate &&
+                x.RegistrationTo >= currentDate);
         }
 
 

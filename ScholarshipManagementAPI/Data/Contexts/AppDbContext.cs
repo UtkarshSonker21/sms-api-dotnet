@@ -76,6 +76,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<KfUniversityAcademicTerm> KfUniversityAcademicTerms { get; set; }
 
+    public virtual DbSet<KfUniversityRegistrationWindow> KfUniversityRegistrationWindows { get; set; }
+
     public virtual DbSet<KfUsersLogin> KfUsersLogins { get; set; }
 
     public virtual DbSet<KfUsersLoginLog> KfUsersLoginLogs { get; set; }
@@ -1084,6 +1086,26 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.AcademicCalendarId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_kf_aterm_Calendar");
+        });
+
+        modelBuilder.Entity<KfUniversityRegistrationWindow>(entity =>
+        {
+            entity.HasKey(e => e.UniversityRegistrationWindowId);
+
+            entity.ToTable("kf_university_registration_windows");
+
+            entity.HasIndex(e => new { e.UniversityId, e.PeriodType, e.AcademicYearStart }, "UQ_kf_university_registration_windows_Period").IsUnique();
+
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.Notes).HasMaxLength(500);
+            entity.Property(e => e.RegistrationFrom).HasPrecision(0);
+            entity.Property(e => e.RegistrationTo).HasPrecision(0);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });
 
         modelBuilder.Entity<KfUsersLogin>(entity =>
