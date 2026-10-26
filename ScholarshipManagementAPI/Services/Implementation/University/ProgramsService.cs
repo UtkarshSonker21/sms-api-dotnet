@@ -1293,9 +1293,13 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     }
                 }
 
-                var defaultName = string.Equals(calendar.NamingStyle, "Custom", StringComparison.OrdinalIgnoreCase)
-                    ? $"{sourceTerm.TermName.Trim()} {startDate.Year}"
-                    : $"Semester {semesterNo}";
+                var defaultName = calendar.NamingStyle?.Trim().ToLowerInvariant() switch
+                {
+                    "term" => $"Term {semesterNo}",
+                    "seasonal" => $"Seasonal {semesterNo}",
+                    "custom" => $"{sourceTerm.TermName.Trim()} {startDate.Year}",
+                    _ => $"Semester {semesterNo}"
+                };
 
                 result.Add(new ProgramSemesterDto
                 {

@@ -59,6 +59,8 @@ public partial class KfProgram
 
     public virtual KfFaculty Faculty { get; set; } = null!;
 
+    public virtual ICollection<KfProgramAdmissionCycle> KfProgramAdmissionCycles { get; set; } = new List<KfProgramAdmissionCycle>();
+
     public virtual ICollection<KfProgramCost> KfProgramCosts { get; set; } = new List<KfProgramCost>();
 
     public virtual ICollection<KfProgramCourse> KfProgramCourses { get; set; } = new List<KfProgramCourse>();

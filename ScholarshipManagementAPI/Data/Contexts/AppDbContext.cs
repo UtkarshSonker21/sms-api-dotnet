@@ -28,6 +28,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<KfProgram> KfPrograms { get; set; }
 
+    public virtual DbSet<KfProgramAdmissionCycle> KfProgramAdmissionCycles { get; set; }
+
     public virtual DbSet<KfProgramCost> KfProgramCosts { get; set; }
 
     public virtual DbSet<KfProgramCourse> KfProgramCourses { get; set; }
@@ -106,6 +108,9 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<ZzMasterDropdown> ZzMasterDropdowns { get; set; }
 
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+        => optionsBuilder.UseSqlServer("Server=db34973.public.databaseasp.net;Database=db34973;User Id=db34973;Password=n@7BS5s!9#Nj;Encrypt=True;TrustServerCertificate=True;MultipleActiveResultSets=True;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -269,6 +274,31 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.KfProgramUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_kf_programs_UpdatedBy_UsersLogin");
+        });
+
+        modelBuilder.Entity<KfProgramAdmissionCycle>(entity =>
+        {
+            entity.HasKey(e => e.AdmissionCycleId);
+
+            entity.ToTable("kf_program_admission_cycles");
+
+            entity.HasIndex(e => new { e.ProgramId, e.Status }, "IX_kf_program_admission_cycles_Status");
+
+            entity.HasIndex(e => new { e.ProgramId, e.CycleName }, "UQ_kf_program_admission_cycles_Program_CycleName").IsUnique();
+
+            entity.Property(e => e.CreatedDate)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.CycleName).HasMaxLength(100);
+            entity.Property(e => e.ModifiedDate).HasPrecision(0);
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValue("Draft");
+
+            entity.HasOne(d => d.Program).WithMany(p => p.KfProgramAdmissionCycles)
+                .HasForeignKey(d => d.ProgramId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_program_admission_cycles_Programs");
         });
 
         modelBuilder.Entity<KfProgramCost>(entity =>
@@ -764,7 +794,13 @@ public partial class AppDbContext : DbContext
 
             entity.ToTable("kf_student_program_applications");
 
+            entity.HasIndex(e => e.AdmissionCycleId, "IX_kf_student_program_applications_AdmissionCycleId");
+
             entity.Property(e => e.Remarks).HasMaxLength(1000);
+
+            entity.HasOne(d => d.AdmissionCycle).WithMany(p => p.KfStudentProgramApplications)
+                .HasForeignKey(d => d.AdmissionCycleId)
+                .HasConstraintName("FK_kf_student_program_applications_AdmissionCycles");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.KfStudentProgramApplicationCreatedByNavigations)
                 .HasForeignKey(d => d.CreatedBy)

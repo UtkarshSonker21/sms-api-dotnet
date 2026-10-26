@@ -27,6 +27,10 @@ public partial class KfStudentProgramApplication
 
     public DateTime? UpdatedDate { get; set; }
 
+    public long? AdmissionCycleId { get; set; }
+
+    public virtual KfProgramAdmissionCycle? AdmissionCycle { get; set; }
+
     public virtual KfUsersLogin CreatedByNavigation { get; set; } = null!;
 
     public virtual ICollection<KfStudentAcademicRegistration> KfStudentAcademicRegistrations { get; set; } = new List<KfStudentAcademicRegistration>();
