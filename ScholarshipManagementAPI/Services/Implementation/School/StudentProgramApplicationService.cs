@@ -452,6 +452,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 SubmittedDate = app.SubmittedDate,
 
                 Remarks = app.Remarks,
+                Notes = app.Remarks,
 
                 CreatedBy = app.CreatedBy,
                 CreatedDate = app.CreatedDate,
@@ -943,6 +944,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                     ApplicationStatusId = x.ApplicationStatus,
                     ApplicationStatusName = ((StudentApplicationStatus)x.ApplicationStatus).ToString(),
                     ActionDate = x.UpdatedDate ?? x.SubmittedDate ?? x.AppliedDate,
+                    Notes = x.Remarks,
 
                     ProgramId = x.ProgramId,
                     ProgramName = x.Program.ProgramName,
@@ -1063,6 +1065,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                     ApplicationStatusId = x.ApplicationStatus,
                     ApplicationStatusName = ((StudentApplicationStatus)x.ApplicationStatus).ToString(),
                     ActionDate = x.UpdatedDate ?? x.SubmittedDate ?? x.AppliedDate,
+                    Notes = x.Remarks,
 
                     ProgramId = x.ProgramId,
                     ProgramName = x.Program.ProgramName,

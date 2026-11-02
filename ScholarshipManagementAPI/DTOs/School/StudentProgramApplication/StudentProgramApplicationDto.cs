@@ -53,6 +53,7 @@ public class StudentProgramApplicationDto
     public long ApplicationStatusId { get; set; }
     public string? ApplicationStatusName { get; set; }
     public DateTime? ActionDate { get; set; }
+    public string? Notes { get; set; }
 
     // Program
     public long ProgramId { get; set; }

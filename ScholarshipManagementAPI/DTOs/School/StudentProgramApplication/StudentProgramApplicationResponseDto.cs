@@ -19,6 +19,7 @@ public class StudentProgramApplicationResponseDto
     public DateTime? SubmittedDate { get; set; }
 
     public string? Remarks { get; set; }
+    public string? Notes { get; set; }
 
     public long CreatedBy { get; set; }
     public DateTime CreatedDate { get; set; }
