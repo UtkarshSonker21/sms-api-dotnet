@@ -29,8 +29,9 @@ namespace ScholarshipManagementAPI.Controllers.University
         [Authorize]
         public async Task<IActionResult> Create([FromBody] ProgramRequestDto dto)
         {
-            dto.CreatedBy = JwtClaimHelper.LoginId(User);                 // or from claims
-            var id = await _service.CreateAsync(dto);
+            var currentUser = await _currentUser.GetCurrentUserAsync();
+            dto.CreatedBy = currentUser.LoginId;
+            var id = await _service.CreateAsync(dto, currentUser);
 
             return Ok(new ApiResponseDto
             {
@@ -46,10 +47,11 @@ namespace ScholarshipManagementAPI.Controllers.University
         [Authorize]
         public async Task<IActionResult> Update(long id, [FromBody] ProgramRequestDto dto)
         {
+            var currentUser = await _currentUser.GetCurrentUserAsync();
             dto.ProgramId = id;
-            dto.UpdatedBy = JwtClaimHelper.LoginId(User);                 // or from claims
+            dto.UpdatedBy = currentUser.LoginId;
 
-            var updated = await _service.UpdateAsync(dto);
+            var updated = await _service.UpdateAsync(dto, currentUser);
 
             if (!updated)
             {
@@ -156,6 +158,129 @@ namespace ScholarshipManagementAPI.Controllers.University
                 Message = result.Count == 0
                     ? "Data not found"
                     : "Data fetched successfully"
+            });
+        }
+
+        [HttpGet("semesters/{programId:long}/backfill-preview")]
+        [Authorize]
+        public async Task<IActionResult> PreviewSemesterBackfill(long programId)
+        {
+            var currentUser = await _currentUser.GetCurrentUserAsync();
+            var result = await _service.PreviewSemesterBackfillAsync(programId, currentUser);
+
+            if (result == null)
+            {
+                return NotFound(new ApiResponseDto
+                {
+                    Success = false,
+                    Message = "Program not found.",
+                    Result = null
+                });
+            }
+
+            return Ok(new ApiResponseDto
+            {
+                Success = true,
+                Result = result,
+                Message = result.IsEligibleForRecovery
+                    ? "Program semester recovery preview generated successfully."
+                    : "Program semester recovery preview contains blocking issues."
+            });
+        }
+
+        [HttpPost("semesters/{programId:long}/backfill")]
+        [Authorize]
+        public async Task<IActionResult> BackfillMissingSemesters(long programId)
+        {
+            var currentUser = await _currentUser.GetCurrentUserAsync();
+            var result = await _service.BackfillMissingSemestersAsync(programId, currentUser);
+
+            if (result == null)
+            {
+                return NotFound(new ApiResponseDto
+                {
+                    Success = false,
+                    Message = "Program not found.",
+                    Result = null
+                });
+            }
+
+            return Ok(new ApiResponseDto
+            {
+                Success = true,
+                Result = result,
+                Message = result.CreatedSemesterNumbers.Count == 0
+                    ? "Program semester records were already complete; no changes were needed."
+                    : "Missing program semester records were created successfully."
+            });
+        }
+
+        [HttpGet("{programId:long}/recovery/course-mappings/preview")]
+        [Authorize]
+        public async Task<IActionResult> PreviewCourseMappingRecovery(long programId)
+        {
+            var currentUser = await _currentUser.GetCurrentUserAsync();
+            var result = await _service.PreviewCourseMappingRecoveryAsync(programId, currentUser);
+            if (result == null)
+            {
+                return NotFound(new ApiResponseDto
+                {
+                    Success = false,
+                    Message = "Program not found.",
+                    Result = null
+                });
+            }
+
+            return Ok(new ApiResponseDto
+            {
+                Success = true,
+                Result = result,
+                Message = result.IsEligibleForRecovery
+                    ? "Course-mapping recovery preview generated successfully."
+                    : "Course-mapping recovery preview contains blocking issues."
+            });
+        }
+
+        [HttpGet("recovery/registrations/{academicRegistrationId:long}/preview")]
+        [Authorize]
+        public async Task<IActionResult> PreviewRegistrationRecovery(long academicRegistrationId)
+        {
+            var currentUser = await _currentUser.GetCurrentUserAsync();
+            var result = await _service.PreviewRegistrationRecoveryAsync(academicRegistrationId, currentUser);
+            if (result == null)
+            {
+                return NotFound(new ApiResponseDto
+                {
+                    Success = false,
+                    Message = "Academic registration not found.",
+                    Result = null
+                });
+            }
+
+            return Ok(new ApiResponseDto
+            {
+                Success = true,
+                Result = result,
+                Message = result.IsEligibleForRecovery
+                    ? "Academic registration recovery preview generated successfully."
+                    : "Academic registration recovery preview contains blocking issues."
+            });
+        }
+
+        [HttpPost("recovery/registrations/{academicRegistrationId:long}/apply")]
+        [Authorize]
+        public async Task<IActionResult> ApplyRegistrationRecovery(
+            long academicRegistrationId,
+            [FromBody] AcademicRegistrationRecoveryApplyRequestDto request)
+        {
+            var currentUser = await _currentUser.GetCurrentUserAsync();
+            var result = await _service.ApplyRegistrationRecoveryAsync(academicRegistrationId, request, currentUser);
+
+            return Ok(new ApiResponseDto
+            {
+                Success = true,
+                Result = result,
+                Message = "Academic data recovery completed."
             });
         }
 

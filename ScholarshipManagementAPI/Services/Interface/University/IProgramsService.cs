@@ -6,9 +6,9 @@ namespace ScholarshipManagementAPI.Services.Interface.University
 {
     public interface IProgramsService
     {
-        Task<long> CreateAsync(ProgramRequestDto dto);
+        Task<long> CreateAsync(ProgramRequestDto dto, LoggedInUserDto currentUser);
 
-        Task<bool> UpdateAsync(ProgramRequestDto dto);
+        Task<bool> UpdateAsync(ProgramRequestDto dto, LoggedInUserDto currentUser);
 
         Task<bool> DeleteAsync(long id);
 
@@ -19,6 +19,19 @@ namespace ScholarshipManagementAPI.Services.Interface.University
 
 
         Task<List<ProgramSemesterDto>> GetSemestersAsync(long programId, LoggedInUserDto currentUser);
+
+        Task<ProgramSemesterBackfillDto?> PreviewSemesterBackfillAsync(long programId, LoggedInUserDto currentUser);
+
+        Task<ProgramSemesterBackfillDto?> BackfillMissingSemestersAsync(long programId, LoggedInUserDto currentUser);
+
+        Task<AcademicProgramRecoveryPreviewDto?> PreviewCourseMappingRecoveryAsync(long programId, LoggedInUserDto currentUser);
+
+        Task<AcademicRegistrationRecoveryPreviewDto?> PreviewRegistrationRecoveryAsync(long academicRegistrationId, LoggedInUserDto currentUser);
+
+        Task<AcademicDataRecoveryApplyResultDto> ApplyRegistrationRecoveryAsync(
+            long academicRegistrationId,
+            AcademicRegistrationRecoveryApplyRequestDto request,
+            LoggedInUserDto currentUser);
 
         Task<List<ProgramSemesterDto>> GetSemesterDefaultsAsync(long programId, long academicCalendarId, LoggedInUserDto currentUser);
 

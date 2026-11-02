@@ -42,7 +42,7 @@ namespace ScholarshipManagementAPI.Helper.Middlewares
             }
             catch (CustomException ex)
             {
-                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                context.Response.StatusCode = ex.StatusCode;
                 context.Response.ContentType = "application/json";
 
                 var response = new ApiResponseDto

@@ -39,6 +39,8 @@ public partial class KfStudentProgramApplication
 
     public virtual ICollection<KfStudentProgramDocument> KfStudentProgramDocuments { get; set; } = new List<KfStudentProgramDocument>();
 
+    public virtual ICollection<KfStudentSponsorshipAssignment> KfStudentSponsorshipAssignments { get; set; } = new List<KfStudentSponsorshipAssignment>();
+
     public virtual KfProgram Program { get; set; } = null!;
 
     public virtual KfStudentRegistration Student { get; set; } = null!;

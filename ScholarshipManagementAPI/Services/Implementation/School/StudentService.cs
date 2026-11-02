@@ -395,7 +395,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 throw new UnauthorizedAccessException();
             }
 
-            return new StudentRequestDto
+            var dtoResult = new StudentRequestDto
             {
                 StudentId = x.StudentId,
                 StudentCode = x.StudentCode,
@@ -489,8 +489,38 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 SelfRelianceLevelName = x.SelfRelianceLevel?.DisplayText,
                 MotivationLevelName = x.MotivationLevel?.DisplayText,
                 FutureGoalsLevelName = x.FutureGoalsLevel?.DisplayText,
-
             };
+
+            var latestApp = await _context.KfStudentProgramApplications
+                .AsNoTracking()
+                .Where(a => a.StudentId == id)
+                .OrderByDescending(a => a.ApplicationId)
+                .Select(a => new
+                {
+                    RequiredDocIds = a.Program.KfProgramDocuments
+                        .Where(pd => pd.IsRequired && pd.IsActive)
+                        .Select(pd => pd.ProgramDocumentId)
+                        .ToList(),
+                    UploadedDocIds = a.KfStudentProgramDocuments
+                        .Select(sd => sd.ProgramDocumentId)
+                        .ToList()
+                })
+                .FirstOrDefaultAsync();
+
+            if (latestApp != null)
+            {
+                var reqDocIds = latestApp.RequiredDocIds.Distinct().ToHashSet();
+                var reqCount = reqDocIds.Count;
+                var subCount = latestApp.UploadedDocIds.Where(dId => reqDocIds.Contains(dId)).Distinct().Count();
+                var missCount = Math.Max(0, reqCount - subCount);
+
+                dtoResult.RequiredDocumentCount = reqCount;
+                dtoResult.SubmittedDocumentCount = subCount;
+                dtoResult.MissingDocumentCount = missCount;
+                dtoResult.AllDocumentsSubmitted = reqCount > 0 && missCount == 0;
+            }
+
+            return dtoResult;
         }
         
         
@@ -694,6 +724,61 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
 
                 })
                 .ToListAsync();
+
+            var studentIds = items
+                .Where(x => x.StudentId.HasValue)
+                .Select(x => x.StudentId!.Value)
+                .Distinct()
+                .ToList();
+
+            if (studentIds.Any())
+            {
+                var appDataList = new List<ApplicationDocumentData>();
+                foreach (var chunk in studentIds.Chunk(1000))
+                {
+                    var chunkData = await _context.KfStudentProgramApplications
+                        .AsNoTracking()
+                        .Where(a => chunk.Contains(a.StudentId))
+                        .Select(a => new ApplicationDocumentData
+                        {
+                            ApplicationId = a.ApplicationId,
+                            StudentId = a.StudentId,
+                            RequiredDocIds = a.Program.KfProgramDocuments
+                                .Where(pd => pd.IsRequired && pd.IsActive)
+                                .Select(pd => pd.ProgramDocumentId)
+                                .ToList(),
+                            UploadedDocIds = a.KfStudentProgramDocuments
+                                .Select(sd => sd.ProgramDocumentId)
+                                .ToList()
+                        })
+                        .ToListAsync();
+
+                    appDataList.AddRange(chunkData);
+                }
+
+                var latestAppByStudent = appDataList
+                    .GroupBy(a => a.StudentId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.OrderByDescending(a => a.ApplicationId).First()
+                    );
+
+                foreach (var item in items)
+                {
+                    if (item.StudentId.HasValue && latestAppByStudent.TryGetValue(item.StudentId.Value, out var appData))
+                    {
+                        var reqDocIds = appData.RequiredDocIds.Distinct().ToHashSet();
+                        var reqCount = reqDocIds.Count;
+                        var subCount = appData.UploadedDocIds.Where(id => reqDocIds.Contains(id)).Distinct().Count();
+                        var missCount = Math.Max(0, reqCount - subCount);
+
+                        item.RequiredDocumentCount = reqCount;
+                        item.SubmittedDocumentCount = subCount;
+                        item.MissingDocumentCount = missCount;
+                        item.AllDocumentsSubmitted = reqCount > 0 && missCount == 0;
+                    }
+                }
+            }
 
             foreach (var item in items)
             {
@@ -908,7 +993,13 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
             return true;
         }
 
-
+        private sealed class ApplicationDocumentData
+        {
+            public long ApplicationId { get; set; }
+            public long StudentId { get; set; }
+            public List<long> RequiredDocIds { get; set; } = new();
+            public List<long> UploadedDocIds { get; set; } = new();
+        }
 
     }
 }

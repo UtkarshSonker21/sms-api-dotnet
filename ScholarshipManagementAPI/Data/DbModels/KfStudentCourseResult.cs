@@ -29,6 +29,8 @@ public partial class KfStudentCourseResult
 
     public virtual KfUsersLogin CreatedByNavigation { get; set; } = null!;
 
+    public virtual ICollection<KfStudentFailingCoreCaseCourse> KfStudentFailingCoreCaseCourses { get; set; } = new List<KfStudentFailingCoreCaseCourse>();
+
     public virtual KfUsersLogin? RecordedByNavigation { get; set; }
 
     public virtual KfStudentCourseEnrollment StudentCourseEnrollment { get; set; } = null!;

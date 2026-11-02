@@ -23,6 +23,8 @@ public partial class KfSponsorshipCategoryMapping
 
     public virtual KfUsersLogin CreatedByNavigation { get; set; } = null!;
 
+    public virtual ICollection<KfStudentSponsorshipAssignment> KfStudentSponsorshipAssignments { get; set; } = new List<KfStudentSponsorshipAssignment>();
+
     public virtual KfSponsorshipType SponsorshipType { get; set; } = null!;
 
     public virtual KfSponsorshipStudentCategory StudentCategory { get; set; } = null!;

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace ScholarshipManagementAPI.DTOs.School.Students
@@ -199,6 +199,11 @@ namespace ScholarshipManagementAPI.DTOs.School.Students
         public long? StudentAssignedUniversityId { get; set; }
         public long? StudentApplicationStatusId { get; set; }
 
+        // Document Completion
+        public int RequiredDocumentCount { get; set; }
+        public int SubmittedDocumentCount { get; set; }
+        public int MissingDocumentCount { get; set; }
+        public bool AllDocumentsSubmitted { get; set; }
 
         #endregion
 

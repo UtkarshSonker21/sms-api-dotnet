@@ -71,22 +71,32 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 .Include(p => p.Faculty)
                 .Include(p => p.KfProgramDocuments)
                     .ThenInclude(pd => pd.DocumentType)
-                .Include(p => p.KfProgramRegistrationWindows)
+                // TEMPORARILY DISABLED — DO NOT DELETE.
+                // Business decision: initial student-to-program applications must not be
+                // blocked by academic registration windows. Registration-window enforcement
+                // belongs to the academic-registration workflow, not initial application.
+                // Preserve this logic for future review if the business rules change.
+                // .Include(p => p.KfProgramRegistrationWindows)
                 .Where(p =>
                     p.IsActive &&
                     p.AccreditationStatus == (int)AccreditationStatusEnum.Accredited)
                 .ToListAsync();
 
-            var today = DateTime.UtcNow;
-            var targetSemester = GetTargetSemester(student);
-            var centrallyOpenUniversityIds = await _context.KfUniversityRegistrationWindows
-                .AsNoTracking()
-                .Where(x => x.IsOpen &&
-                            x.RegistrationFrom.HasValue && x.RegistrationFrom.Value <= today &&
-                            x.RegistrationTo >= today)
-                .Select(x => (long)x.UniversityId)
-                .Distinct()
-                .ToHashSetAsync();
+            // TEMPORARILY DISABLED — DO NOT DELETE.
+            // Business decision: initial student-to-program applications must not be
+            // blocked by academic registration windows. Registration-window enforcement
+            // belongs to the academic-registration workflow, not initial application.
+            // Preserve this logic for future review if the business rules change.
+            // var today = DateTime.UtcNow;
+            // var targetSemester = GetTargetSemester(student);
+            // var centrallyOpenUniversityIds = await _context.KfUniversityRegistrationWindows
+            //     .AsNoTracking()
+            //     .Where(x => x.IsOpen &&
+            //                 x.RegistrationFrom.HasValue && x.RegistrationFrom.Value <= today &&
+            //                 x.RegistrationTo >= today)
+            //     .Select(x => (long)x.UniversityId)
+            //     .Distinct()
+            //     .ToHashSetAsync();
 
             var list = new List<CandidateProgramResponseDto>();
             foreach (var p in programs)
@@ -96,8 +106,10 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
 
                 var currentApplication = (application != null && application.ProgramId == p.ProgramId) ? application : null;
 
-                if (!IsRegistrationOpen(p, targetSemester, today, centrallyOpenUniversityIds))
-                    continue;
+                // TEMPORARILY DISABLED — DO NOT DELETE.
+                // Initial application discovery is independent of academic registration windows.
+                // if (!IsRegistrationOpen(p, targetSemester, today, centrallyOpenUniversityIds))
+                //     continue;
 
                 list.Add(new CandidateProgramResponseDto
                 {
@@ -338,9 +350,14 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                     throw new CustomException("Only Draft applications can be submitted.");
                 }
 
-                var targetSemester = GetTargetSemester(app.Student);
-                if (!await IsRegistrationOpenAsync(app.ProgramId, app.Program.UniversityId, targetSemester, DateTime.UtcNow))
-                    throw new CustomException("Registration is not currently open for this university and program semester.");
+                // TEMPORARILY DISABLED — DO NOT DELETE.
+                // Business decision: initial student-to-program applications must not be
+                // blocked by academic registration windows. Registration-window enforcement
+                // belongs to the academic-registration workflow, not initial application.
+                // Preserve this logic for future review if the business rules change.
+                // var targetSemester = GetTargetSemester(app.Student);
+                // if (!await IsRegistrationOpenAsync(app.ProgramId, app.Program.UniversityId, targetSemester, DateTime.UtcNow))
+                //     throw new CustomException("Registration is not currently open for this university and program semester.");
 
                 // Validate required documents
                 var requiredDocuments = app.Program.KfProgramDocuments
@@ -1429,6 +1446,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
         }
 
 
+        // Retained for future review — do not restore calls from the initial application workflow
+        // without reviewing the business requirement that separates application from registration.
         private bool IsRegistrationOpen(KfProgram program, int semesterNo, DateTime currentDate, HashSet<long> centrallyOpenUniversityIds)
         {
             return centrallyOpenUniversityIds.Contains(program.UniversityId) && program.KfProgramRegistrationWindows.Any(r =>
@@ -1437,6 +1456,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 r.RegistrationTo >= currentDate);
         }
 
+        // Retained for future review — do not restore calls from the initial application workflow
+        // without reviewing the business requirement that separates application from registration.
         private async Task<bool> IsRegistrationOpenAsync(long programId, long universityId, int semesterNo, DateTime currentDate)
         {
             var centrallyOpen = await _context.KfUniversityRegistrationWindows.AsNoTracking().AnyAsync(x =>
@@ -1455,6 +1476,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
         }
 
 
+        // Retained for future transfer/semester rules; not used for initial application window checks.
         public static int GetTargetSemester(KfStudentRegistration student)
         {
             // Future:

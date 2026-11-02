@@ -26,6 +26,7 @@ namespace ScholarshipManagementAPI.Controllers.School
 
 
         [HttpGet("candidate-programs/{studentId:long}")]
+        [Authorize]
         public async Task<IActionResult> GetCandidatePrograms(long studentId)
         {
             var currentUser = await _currentUser.GetCurrentUserAsync();

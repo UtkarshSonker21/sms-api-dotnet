@@ -19,6 +19,8 @@ public partial class KfStudentCourseEnrollment
 
     public DateTime? UpdatedOn { get; set; }
 
+    public long? RetakeCaseCourseId { get; set; }
+
     public virtual KfStudentAcademicRegistration AcademicRegistration { get; set; } = null!;
 
     public virtual KfUsersLogin CreatedByNavigation { get; set; } = null!;
@@ -26,6 +28,8 @@ public partial class KfStudentCourseEnrollment
     public virtual KfStudentCourseResult? KfStudentCourseResult { get; set; }
 
     public virtual KfProgramCourse ProgramCourse { get; set; } = null!;
+
+    public virtual KfStudentFailingCoreCaseCourse? RetakeCaseCourse { get; set; }
 
     public virtual KfUsersLogin? UpdatedByNavigation { get; set; }
 }

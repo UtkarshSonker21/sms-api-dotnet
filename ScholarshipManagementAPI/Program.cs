@@ -63,10 +63,17 @@ builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 // builder.Services.AddOpenApi();
 
-// db context
+// Database credentials must come from the active environment's secure configuration provider.
+var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(defaultConnection))
+{
+    throw new InvalidOperationException(
+        $"Connection string 'DefaultConnection' is not configured for environment '{builder.Environment.EnvironmentName}'. " +
+        "Provide it through a secure environment-specific configuration provider.");
+}
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(defaultConnection));
 
 // model validation response customization
 builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -226,6 +233,7 @@ builder.Services.AddScoped<IUniversityService, UniversityService>();
 builder.Services.AddScoped<IStaffService, StaffService>();
 
 builder.Services.AddScoped<IAccreditationService, AccreditationService>();
+builder.Services.AddScoped<IFailingCoreCaseService, FailingCoreCaseService>();
 
 
 // new service 
@@ -233,6 +241,7 @@ builder.Services.AddScoped<IFacultiesService, FacultiesService>();
 builder.Services.AddScoped<ICoursesService, CoursesService>();
 builder.Services.AddScoped<IDocumentTypesService, DocumentTypesService>();
 builder.Services.AddScoped<ISponsorshipMatrixService, SponsorshipMatrixService>();
+builder.Services.AddScoped<IStudentSponsorshipAssignmentService, StudentSponsorshipAssignmentService>();
 builder.Services.AddScoped<ISponsorshipTypesService, SponsorshipTypesService>();
 builder.Services.AddScoped<IStudentCategoryService, StudentCategoryService>();
 builder.Services.AddScoped<IProgramsService, ProgramsService>();

@@ -49,6 +49,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Ngo
                 .Where(x => x.IsActive)
                 .Select(x => new SponsorshipCategoryMappingDto
                 {
+                    MappingId = x.MappingId,
                     SponsorshipTypeId = x.SponsorshipTypeId,
                     StudentCategoryId = x.StudentCategoryId,
                     IsActive = x.IsActive

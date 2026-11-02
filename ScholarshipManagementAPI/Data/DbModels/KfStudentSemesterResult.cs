@@ -25,6 +25,8 @@ public partial class KfStudentSemesterResult
 
     public DateTime? UpdatedOn { get; set; }
 
+    public string? InternalNote { get; set; }
+
     public virtual KfStudentAcademicRegistration AcademicRegistration { get; set; } = null!;
 
     public virtual KfUsersLogin CreatedByNavigation { get; set; } = null!;

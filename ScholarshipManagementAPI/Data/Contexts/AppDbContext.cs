@@ -60,6 +60,10 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<KfStudentCourseResult> KfStudentCourseResults { get; set; }
 
+    public virtual DbSet<KfStudentFailingCoreCase> KfStudentFailingCoreCases { get; set; }
+
+    public virtual DbSet<KfStudentFailingCoreCaseCourse> KfStudentFailingCoreCaseCourses { get; set; }
+
     public virtual DbSet<KfStudentHistory> KfStudentHistories { get; set; }
 
     public virtual DbSet<KfStudentProgramApplication> KfStudentProgramApplications { get; set; }
@@ -69,6 +73,8 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<KfStudentRegistration> KfStudentRegistrations { get; set; }
 
     public virtual DbSet<KfStudentSemesterResult> KfStudentSemesterResults { get; set; }
+
+    public virtual DbSet<KfStudentSponsorshipAssignment> KfStudentSponsorshipAssignments { get; set; }
 
     public virtual DbSet<KfUniversity> KfUniversities { get; set; }
 
@@ -109,10 +115,6 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<ZzMasterCurrency> ZzMasterCurrencies { get; set; }
 
     public virtual DbSet<ZzMasterDropdown> ZzMasterDropdowns { get; set; }
-
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=db34973.public.databaseasp.net;Database=db34973;User Id=db34973;Password=n@7BS5s!9#Nj;Encrypt=True;TrustServerCertificate=True;MultipleActiveResultSets=True;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -713,6 +715,8 @@ public partial class AppDbContext : DbContext
         {
             entity.ToTable("kf_student_course_enrollments");
 
+            entity.HasIndex(e => e.RetakeCaseCourseId, "IX_kf_student_course_enrollments_RetakeCaseCourse");
+
             entity.HasIndex(e => new { e.AcademicRegistrationId, e.ProgramCourseId }, "UQ_kf_student_course_enrollments_Registration_Course").IsUnique();
 
             entity.Property(e => e.CreatedOn).HasDefaultValueSql("(sysutcdatetime())");
@@ -731,6 +735,10 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.ProgramCourseId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_kf_student_course_enrollments_ProgramCourse");
+
+            entity.HasOne(d => d.RetakeCaseCourse).WithMany(p => p.KfStudentCourseEnrollments)
+                .HasForeignKey(d => d.RetakeCaseCourseId)
+                .HasConstraintName("FK_kf_student_course_enrollments_RetakeCaseCourse");
 
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.KfStudentCourseEnrollmentUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
@@ -764,6 +772,64 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.KfStudentCourseResultUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_kf_student_course_results_UpdatedBy");
+        });
+
+        modelBuilder.Entity<KfStudentFailingCoreCase>(entity =>
+        {
+            entity.ToTable("kf_student_failing_core_cases");
+
+            entity.HasIndex(e => e.AcademicRegistrationId, "UQ_kf_student_failing_core_cases_Registration").IsUnique();
+
+            entity.Property(e => e.CreatedOn)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.DecisionComment).HasMaxLength(2000);
+            entity.Property(e => e.DecisionOn).HasColumnType("datetime");
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.Status).HasMaxLength(20);
+            entity.Property(e => e.SubmittedOn).HasColumnType("datetime");
+
+            entity.HasOne(d => d.AcademicRegistration).WithOne(p => p.KfStudentFailingCoreCase)
+                .HasForeignKey<KfStudentFailingCoreCase>(d => d.AcademicRegistrationId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_failing_core_cases_Registration");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.KfStudentFailingCoreCaseCreatedByNavigations)
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_failing_core_cases_CreatedBy");
+
+            entity.HasOne(d => d.DecisionByNavigation).WithMany(p => p.KfStudentFailingCoreCaseDecisionByNavigations)
+                .HasForeignKey(d => d.DecisionBy)
+                .HasConstraintName("FK_kf_student_failing_core_cases_DecisionBy");
+        });
+
+        modelBuilder.Entity<KfStudentFailingCoreCaseCourse>(entity =>
+        {
+            entity.ToTable("kf_student_failing_core_case_courses");
+
+            entity.HasIndex(e => new { e.FailingCoreCaseId, e.StudentCourseResultId }, "UQ_kf_student_failing_core_case_courses_Case_Result").IsUnique();
+
+            entity.Property(e => e.CreatedOn)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnType("datetime");
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.KfStudentFailingCoreCaseCourses)
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_failing_core_case_courses_CreatedBy");
+
+            entity.HasOne(d => d.FailingCoreCase).WithMany(p => p.KfStudentFailingCoreCaseCourses)
+                .HasForeignKey(d => d.FailingCoreCaseId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_failing_core_case_courses_Case");
+
+            entity.HasOne(d => d.StudentCourseResult).WithMany(p => p.KfStudentFailingCoreCaseCourses)
+                .HasForeignKey(d => d.StudentCourseResultId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_failing_core_case_courses_CourseResult");
         });
 
         modelBuilder.Entity<KfStudentHistory>(entity =>
@@ -954,6 +1020,7 @@ public partial class AppDbContext : DbContext
             entity.HasIndex(e => e.AcademicRegistrationId, "UQ_kf_student_semester_results_Registration").IsUnique();
 
             entity.Property(e => e.CreatedOn).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.InternalNote).HasMaxLength(1000);
             entity.Property(e => e.SemesterGpa)
                 .HasColumnType("decimal(5, 2)")
                 .HasColumnName("SemesterGPA");
@@ -978,6 +1045,40 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.KfStudentSemesterResultUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK_kf_student_semester_results_UpdatedBy");
+        });
+
+        modelBuilder.Entity<KfStudentSponsorshipAssignment>(entity =>
+        {
+            entity.HasKey(e => e.AssignmentId);
+
+            entity.ToTable("kf_student_sponsorship_assignments");
+
+            entity.HasIndex(e => e.ApplicationId, "IX_kf_student_sponsorship_assignments_ApplicationId");
+
+            entity.HasIndex(e => e.SponsorshipCategoryMappingId, "IX_kf_student_sponsorship_assignments_CategoryMappingId");
+
+            entity.Property(e => e.AssignedDate).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.Remarks).HasMaxLength(500);
+
+            entity.HasOne(d => d.Application).WithMany(p => p.KfStudentSponsorshipAssignments)
+                .HasForeignKey(d => d.ApplicationId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_sponsorship_assignments_Application");
+
+            entity.HasOne(d => d.AssignedByNavigation).WithMany(p => p.KfStudentSponsorshipAssignmentAssignedByNavigations)
+                .HasForeignKey(d => d.AssignedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_sponsorship_assignments_AssignedBy");
+
+            entity.HasOne(d => d.SponsorshipCategoryMapping).WithMany(p => p.KfStudentSponsorshipAssignments)
+                .HasForeignKey(d => d.SponsorshipCategoryMappingId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_kf_student_sponsorship_assignments_CategoryMapping");
+
+            entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.KfStudentSponsorshipAssignmentUpdatedByNavigations)
+                .HasForeignKey(d => d.UpdatedBy)
+                .HasConstraintName("FK_kf_student_sponsorship_assignments_UpdatedBy");
         });
 
         modelBuilder.Entity<KfUniversity>(entity =>

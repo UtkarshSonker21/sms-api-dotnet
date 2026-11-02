@@ -107,6 +107,12 @@ public partial class KfUsersLogin
 
     public virtual ICollection<KfStudentCourseResult> KfStudentCourseResultUpdatedByNavigations { get; set; } = new List<KfStudentCourseResult>();
 
+    public virtual ICollection<KfStudentFailingCoreCaseCourse> KfStudentFailingCoreCaseCourses { get; set; } = new List<KfStudentFailingCoreCaseCourse>();
+
+    public virtual ICollection<KfStudentFailingCoreCase> KfStudentFailingCoreCaseCreatedByNavigations { get; set; } = new List<KfStudentFailingCoreCase>();
+
+    public virtual ICollection<KfStudentFailingCoreCase> KfStudentFailingCoreCaseDecisionByNavigations { get; set; } = new List<KfStudentFailingCoreCase>();
+
     public virtual ICollection<KfStudentHistory> KfStudentHistories { get; set; } = new List<KfStudentHistory>();
 
     public virtual ICollection<KfStudentProgramApplication> KfStudentProgramApplicationCreatedByNavigations { get; set; } = new List<KfStudentProgramApplication>();
@@ -126,6 +132,10 @@ public partial class KfUsersLogin
     public virtual ICollection<KfStudentSemesterResult> KfStudentSemesterResultSubmittedByNavigations { get; set; } = new List<KfStudentSemesterResult>();
 
     public virtual ICollection<KfStudentSemesterResult> KfStudentSemesterResultUpdatedByNavigations { get; set; } = new List<KfStudentSemesterResult>();
+
+    public virtual ICollection<KfStudentSponsorshipAssignment> KfStudentSponsorshipAssignmentAssignedByNavigations { get; set; } = new List<KfStudentSponsorshipAssignment>();
+
+    public virtual ICollection<KfStudentSponsorshipAssignment> KfStudentSponsorshipAssignmentUpdatedByNavigations { get; set; } = new List<KfStudentSponsorshipAssignment>();
 
     public virtual ICollection<KfUniversity> KfUniversityAccreditationByNavigations { get; set; } = new List<KfUniversity>();
 

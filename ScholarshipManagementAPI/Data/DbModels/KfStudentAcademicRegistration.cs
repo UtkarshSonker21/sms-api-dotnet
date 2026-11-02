@@ -35,6 +35,8 @@ public partial class KfStudentAcademicRegistration
 
     public virtual ICollection<KfStudentCourseEnrollment> KfStudentCourseEnrollments { get; set; } = new List<KfStudentCourseEnrollment>();
 
+    public virtual KfStudentFailingCoreCase? KfStudentFailingCoreCase { get; set; }
+
     public virtual KfStudentSemesterResult? KfStudentSemesterResult { get; set; }
 
     public virtual KfProgram Program { get; set; } = null!;
