@@ -1369,9 +1369,11 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                             return newStatus == StudentApplicationStatus.Accepted ||
                                    newStatus == StudentApplicationStatus.AcceptanceRejected;
 
-                        // Start Awarding Review
+                        // Start Awarding Review / Award Decision
                         case StudentApplicationStatus.Accepted:
-                            return newStatus == StudentApplicationStatus.AwardingInProcess;
+                            return newStatus == StudentApplicationStatus.AwardingInProcess ||
+                                   newStatus == StudentApplicationStatus.Awarded ||
+                                   newStatus == StudentApplicationStatus.AwardingRejected;
 
                         // Awarding Review
                         case StudentApplicationStatus.AwardingInProcess:
