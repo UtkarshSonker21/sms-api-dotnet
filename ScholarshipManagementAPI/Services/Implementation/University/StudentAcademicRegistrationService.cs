@@ -79,16 +79,16 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                 // sufficient to establish eligibility. Additional eligibility checks
                 // during academic registration are therefore not required at this stage.
                 // Keep this code for future reference in case the eligibility rules change.
-                var now = DateTime.UtcNow;
-                var centralRegistrationOpen = await _context.KfUniversityRegistrationWindows
-                    .AsNoTracking()
-                    .AnyAsync(x => x.UniversityId == application.Program.UniversityId &&
-                                   x.IsOpen &&
-                                   x.RegistrationFrom.HasValue &&
-                                   x.RegistrationFrom.Value <= now &&
-                                   x.RegistrationTo >= now);
-                if (!centralRegistrationOpen)
-                    throw new CustomException("University registration is not currently open.");
+                // var now = DateTime.UtcNow;
+                // var centralRegistrationOpen = await _context.KfUniversityRegistrationWindows
+                //     .AsNoTracking()
+                //     .AnyAsync(x => x.UniversityId == application.Program.UniversityId &&
+                //                    x.IsOpen &&
+                //                    x.RegistrationFrom.HasValue &&
+                //                    x.RegistrationFrom.Value <= now &&
+                //                    x.RegistrationTo >= now);
+                // if (!centralRegistrationOpen)
+                //     throw new CustomException("University registration is not currently open.");
 
                 var alreadyRegistered = await _context.KfStudentAcademicRegistrations
                     .AnyAsync(x => x.ApplicationId == dto.ApplicationId);
