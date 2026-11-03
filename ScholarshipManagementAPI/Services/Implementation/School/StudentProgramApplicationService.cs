@@ -1394,7 +1394,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                     {
                         // Start Sponsoring Review
                         case StudentApplicationStatus.Awarded:
-                            return newStatus == StudentApplicationStatus.SponsoringInProcess;
+                            return newStatus == StudentApplicationStatus.SponsoringInProcess || newStatus == StudentApplicationStatus.Sponsored;
 
                         // Sponsoring Review
                         case StudentApplicationStatus.SponsoringInProcess:

@@ -83,8 +83,10 @@ public sealed class StudentSponsorshipAssignmentService : IStudentSponsorshipAss
 
         try
         {
-            if (!await _context.KfStudentProgramApplications
-                    .AnyAsync(x => x.ApplicationId == applicationId, cancellationToken))
+            var application = await _context.KfStudentProgramApplications
+                .FirstOrDefaultAsync(x => x.ApplicationId == applicationId, cancellationToken);
+
+            if (application == null)
                 throw new CustomException("Application not found.", StatusCodes.Status404NotFound);
 
             var categoryOptions = await GetValidatedCategoryOptionsAsync(request.StudentCategoryId, cancellationToken);
@@ -96,6 +98,28 @@ public sealed class StudentSponsorshipAssignmentService : IStudentSponsorshipAss
             // the full current permission set is always resolved from the matrix.
             if (existingCategoryRows.Count > 0)
             {
+                // Ensure application status is moved to Sponsored if currently Awarded or in review
+                if (application.ApplicationStatus == (int)StudentApplicationStatus.Awarded ||
+                    application.ApplicationStatus == (int)StudentApplicationStatus.SponsoringInProcess)
+                {
+                    application.ApplicationStatus = (int)StudentApplicationStatus.Sponsored;
+                    application.UpdatedBy = currentUser.LoginId;
+                    application.UpdatedDate = DateTime.UtcNow;
+
+                    _context.KfStudentHistories.Add(new KfStudentHistory
+                    {
+                        StudentId = application.StudentId,
+                        ApplicationId = application.ApplicationId,
+                        Title = "Application Sponsored",
+                        Description = "Direct Aid Committee approved the scholarship sponsorship.",
+                        HistoryType = (int)StudentHistoryTypeEnum.ApplicationSponsored,
+                        CreatedBy = currentUser.LoginId,
+                        CreatedDate = DateTime.UtcNow
+                    });
+
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+
                 var existing = await FindCategoryViewAsync(applicationId, request.StudentCategoryId, true, cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return existing!;
@@ -113,6 +137,27 @@ public sealed class StudentSponsorshipAssignmentService : IStudentSponsorshipAss
             };
 
             _context.KfStudentSponsorshipAssignments.Add(assignment);
+
+            // Automatically transition application status from Awarded (or SponsoringInProcess) to Sponsored
+            if (application.ApplicationStatus == (int)StudentApplicationStatus.Awarded ||
+                application.ApplicationStatus == (int)StudentApplicationStatus.SponsoringInProcess)
+            {
+                application.ApplicationStatus = (int)StudentApplicationStatus.Sponsored;
+                application.UpdatedBy = currentUser.LoginId;
+                application.UpdatedDate = DateTime.UtcNow;
+
+                _context.KfStudentHistories.Add(new KfStudentHistory
+                {
+                    StudentId = application.StudentId,
+                    ApplicationId = application.ApplicationId,
+                    Title = "Application Sponsored",
+                    Description = "Direct Aid Committee approved the scholarship sponsorship.",
+                    HistoryType = (int)StudentHistoryTypeEnum.ApplicationSponsored,
+                    CreatedBy = currentUser.LoginId,
+                    CreatedDate = DateTime.UtcNow
+                });
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
             var result = await FindCategoryViewAsync(applicationId, request.StudentCategoryId, true, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -240,6 +285,28 @@ public sealed class StudentSponsorshipAssignmentService : IStudentSponsorshipAss
                 Remarks = remarks
             };
             _context.KfStudentSponsorshipAssignments.Add(replacement);
+
+            var application = await _context.KfStudentProgramApplications
+                .FirstOrDefaultAsync(x => x.ApplicationId == assignment.ApplicationId, cancellationToken);
+            if (application != null && (application.ApplicationStatus == (int)StudentApplicationStatus.Awarded ||
+                application.ApplicationStatus == (int)StudentApplicationStatus.SponsoringInProcess))
+            {
+                application.ApplicationStatus = (int)StudentApplicationStatus.Sponsored;
+                application.UpdatedBy = currentUser.LoginId;
+                application.UpdatedDate = now;
+
+                _context.KfStudentHistories.Add(new KfStudentHistory
+                {
+                    StudentId = application.StudentId,
+                    ApplicationId = application.ApplicationId,
+                    Title = "Application Sponsored",
+                    Description = "Direct Aid Committee approved the scholarship sponsorship.",
+                    HistoryType = (int)StudentHistoryTypeEnum.ApplicationSponsored,
+                    CreatedBy = currentUser.LoginId,
+                    CreatedDate = now
+                });
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
 
             var result = await FindCategoryViewAsync(assignment.ApplicationId, request.StudentCategoryId, true, cancellationToken);
