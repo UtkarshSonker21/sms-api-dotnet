@@ -111,4 +111,16 @@ public class StudentProgramApplicationDto
         public string? RecommendationLetterPath { get; set; }
         public string? RecommendationLetterNotes { get; set; }
 
+        // Sponsorship Assignment & Cost Details
+        public long? SponsorshipCategoryId { get; set; }
+        public string? SponsorshipCategoryName { get; set; }
+        public decimal? TotalProgramCost { get; set; }
+        public string? ProgramCurrency { get; set; }
+        public string? SponsorshipSource { get; set; }
+        public string? DonorName { get; set; }
+        public string? DonorCode { get; set; }
+
+        public long? StudentCategoryId { get => SponsorshipCategoryId; set => SponsorshipCategoryId = value; }
+        public string? CategoryName { get => SponsorshipCategoryName; set => SponsorshipCategoryName = value; }
+
 }

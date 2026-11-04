@@ -15,4 +15,8 @@ public class StudentProgramApplicationFilterDto : BaseFilterDto
     public long? ProgramId { get; set; }
 
     public long? ApplicationStatusId { get; set; }
+
+    public long? StudentCategoryId { get; set; }
+
+    public bool? IsDonorSponsored { get; set; }
 }

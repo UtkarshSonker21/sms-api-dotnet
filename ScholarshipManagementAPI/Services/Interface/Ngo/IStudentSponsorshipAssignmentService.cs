@@ -31,4 +31,9 @@ public interface IStudentSponsorshipAssignmentService
         long assignmentId,
         LoggedInUserDto currentUser,
         CancellationToken cancellationToken = default);
+
+    Task<SponsorshipAssignmentDto> AssignDonorAsync(
+        AssignDonorSponsorshipRequestDto request,
+        LoggedInUserDto currentUser,
+        CancellationToken cancellationToken = default);
 }

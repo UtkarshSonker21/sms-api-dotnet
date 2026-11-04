@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ScholarshipManagementAPI.Data.DbModels;
@@ -22,6 +22,10 @@ public partial class KfStudentSponsorshipAssignment
     public DateTime? UpdatedDate { get; set; }
 
     public string? Remarks { get; set; }
+
+    public string? DonorName { get; set; }
+
+    public string? DonorCode { get; set; }
 
     public virtual KfStudentProgramApplication Application { get; set; } = null!;
 

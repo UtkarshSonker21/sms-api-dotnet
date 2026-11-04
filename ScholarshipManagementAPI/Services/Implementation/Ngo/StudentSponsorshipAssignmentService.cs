@@ -93,9 +93,6 @@ public sealed class StudentSponsorshipAssignmentService : IStudentSponsorshipAss
             var existingCategoryRows = await GetActiveRowsForCategoryAsync(
                 applicationId, request.StudentCategoryId, cancellationToken);
 
-            // One row identifies one logical category assignment. The referenced
-            // mapping is an anchor because the existing table has no category FK;
-            // the full current permission set is always resolved from the matrix.
             if (existingCategoryRows.Count > 0)
             {
                 // Ensure application status is moved to Sponsored if currently Awarded or in review
@@ -160,6 +157,107 @@ public sealed class StudentSponsorshipAssignmentService : IStudentSponsorshipAss
 
             await _context.SaveChangesAsync(cancellationToken);
             var result = await FindCategoryViewAsync(applicationId, request.StudentCategoryId, true, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return result!;
+        }
+        catch (Exception operationException)
+        {
+            await RollbackPreservingOriginalAsync(transaction, operationException);
+            throw;
+        }
+    }
+
+    public async Task<SponsorshipAssignmentDto> AssignDonorAsync(
+        AssignDonorSponsorshipRequestDto request,
+        LoggedInUserDto currentUser,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureNgoAccess(currentUser);
+        if (request.ApplicationId <= 0)
+            throw new CustomException("A valid application ID is required.");
+        if (request.SponsorshipCategoryId <= 0)
+            throw new CustomException("Select a valid student sponsorship category.");
+
+        var donorName = NormalizeDonorString(request.DonorName, 250, "Donor name");
+        if (string.IsNullOrWhiteSpace(donorName))
+            throw new CustomException("Donor name is required.");
+
+        var donorCode = NormalizeDonorString(request.DonorCode, 100, "Donor code / reference");
+        if (string.IsNullOrWhiteSpace(donorCode))
+            throw new CustomException("Donor code / reference is required.");
+
+        var remarks = NormalizeRemarks(request.Remarks);
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        try
+        {
+            var application = await _context.KfStudentProgramApplications
+                .FirstOrDefaultAsync(x => x.ApplicationId == request.ApplicationId, cancellationToken);
+
+            if (application == null)
+                throw new CustomException("Application not found.", StatusCodes.Status404NotFound);
+
+            var categoryOptions = await GetValidatedCategoryOptionsAsync(request.SponsorshipCategoryId, cancellationToken);
+            var existingCategoryRows = await GetActiveRowsForCategoryAsync(
+                request.ApplicationId, request.SponsorshipCategoryId, cancellationToken);
+
+            var now = DateTime.UtcNow;
+
+            if (existingCategoryRows.Count > 0)
+            {
+                foreach (var row in existingCategoryRows)
+                {
+                    row.DonorName = donorName;
+                    row.DonorCode = donorCode;
+                    if (remarks != null) row.Remarks = remarks;
+                    row.UpdatedBy = currentUser.LoginId;
+                    row.UpdatedDate = now;
+                }
+            }
+            else
+            {
+                var anchor = categoryOptions.OrderBy(x => x.MappingId).First();
+                var assignment = new KfStudentSponsorshipAssignment
+                {
+                    ApplicationId = request.ApplicationId,
+                    SponsorshipCategoryMappingId = anchor.MappingId,
+                    IsActive = true,
+                    AssignedBy = currentUser.LoginId,
+                    AssignedDate = now,
+                    DonorName = donorName,
+                    DonorCode = donorCode,
+                    Remarks = remarks
+                };
+
+                _context.KfStudentSponsorshipAssignments.Add(assignment);
+            }
+
+            // Move application status to Sponsored if currently Awarded or in review
+            if (application.ApplicationStatus == (int)StudentApplicationStatus.Awarded ||
+                application.ApplicationStatus == (int)StudentApplicationStatus.SponsoringInProcess)
+            {
+                application.ApplicationStatus = (int)StudentApplicationStatus.Sponsored;
+                application.UpdatedBy = currentUser.LoginId;
+                application.UpdatedDate = now;
+
+                _context.KfStudentHistories.Add(new KfStudentHistory
+                {
+                    StudentId = application.StudentId,
+                    ApplicationId = application.ApplicationId,
+                    Title = "Application Sponsored",
+                    Description = $"Direct Aid Committee assigned donor-sponsored scholarship category ({donorName} / {donorCode}).",
+                    HistoryType = (int)StudentHistoryTypeEnum.ApplicationSponsored,
+                    CreatedBy = currentUser.LoginId,
+                    CreatedDate = now
+                });
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            var result = await FindCategoryViewAsync(request.ApplicationId, request.SponsorshipCategoryId, true, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return result!;
         }
@@ -346,14 +444,10 @@ public sealed class StudentSponsorshipAssignmentService : IStudentSponsorshipAss
         var views = new List<SponsorshipAssignmentDto>();
         foreach (var group in rows.Where(x => x.IsActive).GroupBy(x => x.SponsorshipCategoryMapping.StudentCategoryId))
         {
-            // Older versions stored a row for an individual matrix mapping. Fold
-            // active rows of the same category into one category assignment.
             var anchor = group.OrderBy(x => x.AssignmentId).First();
             views.Add(ToAssignmentDto(anchor, optionsByCategory));
         }
 
-        // Keep inactive records visible as historical rows. The old schema has
-        // no grouping key, so their prior logical grouping cannot be reconstructed.
         views.AddRange(rows.Where(x => !x.IsActive).Select(x => ToAssignmentDto(x, optionsByCategory)));
         return views
             .OrderByDescending(x => x.IsActive)
@@ -404,6 +498,8 @@ public sealed class StudentSponsorshipAssignmentService : IStudentSponsorshipAss
             AssignedDate = row.AssignedDate,
             UpdatedBy = row.UpdatedBy,
             UpdatedDate = row.UpdatedDate,
+            DonorName = row.DonorName,
+            DonorCode = row.DonorCode,
             Remarks = row.Remarks,
             PermittedSponsorshipTypes = optionsByCategory.TryGetValue(mapping.StudentCategoryId, out var permitted)
                 ? permitted
@@ -464,6 +560,14 @@ public sealed class StudentSponsorshipAssignmentService : IStudentSponsorshipAss
         var normalized = remarks?.Trim();
         if (normalized?.Length > 500)
             throw new CustomException("Remarks cannot exceed 500 characters.");
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private static string? NormalizeDonorString(string? value, int maxLength, string fieldName)
+    {
+        var normalized = value?.Trim();
+        if (normalized?.Length > maxLength)
+            throw new CustomException($"{fieldName} cannot exceed {maxLength} characters.");
         return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 

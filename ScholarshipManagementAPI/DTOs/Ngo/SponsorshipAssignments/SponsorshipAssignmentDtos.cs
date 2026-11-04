@@ -4,10 +4,35 @@ namespace ScholarshipManagementAPI.DTOs.Ngo.SponsorshipAssignments;
 
 public sealed class CreateSponsorshipAssignmentRequestDto
 {
-    [Range(1, long.MaxValue)]
+    [Range(1, long.MaxValue, ErrorMessage = "A valid student category is required.")]
     public long StudentCategoryId { get; set; }
 
-    [StringLength(500)]
+    [StringLength(500, ErrorMessage = "Remarks cannot exceed 500 characters.")]
+    public string? Remarks { get; set; }
+}
+
+public sealed class AssignDonorSponsorshipRequestDto
+{
+    public long ApplicationId { get; set; }
+
+    [Range(1, long.MaxValue, ErrorMessage = "A valid sponsorship category is required.")]
+    public long SponsorshipCategoryId { get; set; }
+
+    public long StudentCategoryId
+    {
+        get => SponsorshipCategoryId;
+        set { if (value > 0) SponsorshipCategoryId = value; }
+    }
+
+    [Required(ErrorMessage = "Donor name is required.")]
+    [StringLength(250, ErrorMessage = "Donor name cannot exceed 250 characters.")]
+    public string DonorName { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Donor code / reference is required.")]
+    [StringLength(100, ErrorMessage = "Donor code / reference cannot exceed 100 characters.")]
+    public string DonorCode { get; set; } = string.Empty;
+
+    [StringLength(500, ErrorMessage = "Remarks cannot exceed 500 characters.")]
     public string? Remarks { get; set; }
 }
 
@@ -24,9 +49,6 @@ public sealed class SponsorshipAssignmentOptionDto
 
 public sealed class SponsorshipAssignmentDto
 {
-    // AssignmentId identifies the persisted category assignment row. Since the
-    // existing schema stores a matrix mapping FK, SponsorshipCategoryMappingId
-    // is an anchor mapping for its category; permitted types are derived live.
     public long AssignmentId { get; set; }
     public long ApplicationId { get; set; }
     public long SponsorshipCategoryMappingId { get; set; }
@@ -39,6 +61,8 @@ public sealed class SponsorshipAssignmentDto
     public DateTime AssignedDate { get; set; }
     public long? UpdatedBy { get; set; }
     public DateTime? UpdatedDate { get; set; }
+    public string? DonorName { get; set; }
+    public string? DonorCode { get; set; }
     public string? Remarks { get; set; }
     public List<SponsorshipAssignmentOptionDto> PermittedSponsorshipTypes { get; set; } = new();
 }

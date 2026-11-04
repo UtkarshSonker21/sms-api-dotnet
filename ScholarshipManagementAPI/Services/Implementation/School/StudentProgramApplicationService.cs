@@ -890,6 +890,26 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
             if (filter.ApplicationStatusId.HasValue)
                 query = query.Where(x => x.ApplicationStatus == filter.ApplicationStatusId);
 
+            if (filter.StudentCategoryId.HasValue)
+            {
+                query = query.Where(x => x.KfStudentSponsorshipAssignments
+                    .Any(a => a.IsActive && a.SponsorshipCategoryMapping.StudentCategoryId == filter.StudentCategoryId.Value));
+            }
+
+            if (filter.IsDonorSponsored.HasValue)
+            {
+                if (filter.IsDonorSponsored.Value)
+                {
+                    query = query.Where(x => x.KfStudentSponsorshipAssignments
+                        .Any(a => a.IsActive && (!string.IsNullOrEmpty(a.DonorName) || !string.IsNullOrEmpty(a.DonorCode))));
+                }
+                else
+                {
+                    query = query.Where(x => !x.KfStudentSponsorshipAssignments
+                        .Any(a => a.IsActive && (!string.IsNullOrEmpty(a.DonorName) || !string.IsNullOrEmpty(a.DonorCode))));
+                }
+            }
+
             if (!string.IsNullOrWhiteSpace(filter.SearchText))
             {
                 var search = filter.SearchText.Trim();
@@ -971,6 +991,86 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 item.ThirdName,
                 item.LastName
                     }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            }
+
+            if (items.Any())
+            {
+                var appIds = items.Select(x => x.ApplicationId).ToList();
+                var activeAssignments = await _context.KfStudentSponsorshipAssignments
+                    .AsNoTracking()
+                    .Where(a => appIds.Contains(a.ApplicationId) && a.IsActive)
+                    .Select(a => new
+                    {
+                        a.ApplicationId,
+                        a.AssignmentId,
+                        StudentCategoryId = (long?)a.SponsorshipCategoryMapping.StudentCategoryId,
+                        CategoryName = a.SponsorshipCategoryMapping.StudentCategory.CategoryName,
+                        a.DonorName,
+                        a.DonorCode
+                    })
+                    .ToListAsync();
+
+                var assignmentsByApp = activeAssignments
+                    .GroupBy(a => a.ApplicationId)
+                    .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.AssignmentId).First());
+
+                var programIds = items.Select(x => x.ProgramId).Distinct().ToList();
+                var programsData = await _context.KfPrograms
+                    .AsNoTracking()
+                    .Where(p => programIds.Contains(p.ProgramId))
+                    .Select(p => new
+                    {
+                        p.ProgramId,
+                        p.NumberOfSemesters,
+                        Costs = p.KfProgramCosts
+                            .Select(c => new { c.Amount, c.SponsorshipType.FrequencyType })
+                            .ToList()
+                    })
+                    .ToDictionaryAsync(p => p.ProgramId, p => p);
+
+                var countryIds = items.Where(x => x.UniversityCountryId.HasValue).Select(x => x.UniversityCountryId!.Value).Distinct().ToList();
+                var currencies = await _context.ZzMasterCurrencies
+                    .AsNoTracking()
+                    .Where(c => c.IsActive && countryIds.Contains(c.CountryId))
+                    .GroupBy(c => c.CountryId)
+                    .ToDictionaryAsync(g => g.Key, g => g.First().CurrencyCode);
+
+                foreach (var item in items)
+                {
+                    if (assignmentsByApp.TryGetValue(item.ApplicationId, out var assign))
+                    {
+                        item.SponsorshipCategoryId = assign.StudentCategoryId;
+                        item.SponsorshipCategoryName = assign.CategoryName;
+                        item.DonorName = assign.DonorName;
+                        item.DonorCode = assign.DonorCode;
+                        var isDonor = !string.IsNullOrWhiteSpace(assign.DonorName) || !string.IsNullOrWhiteSpace(assign.DonorCode);
+                        item.SponsorshipSource = isDonor ? "Donor" : "Direct Aid Pool";
+                    }
+
+                    if (programsData.TryGetValue(item.ProgramId, out var pInfo))
+                    {
+                        if (pInfo.Costs.Any())
+                        {
+                            var recurringSum = pInfo.Costs.Where(c => c.FrequencyType != 1).Sum(c => c.Amount);
+                            var oneTimeSum = pInfo.Costs.Where(c => c.FrequencyType == 1).Sum(c => c.Amount);
+                            item.TotalProgramCost = (recurringSum * pInfo.NumberOfSemesters) + oneTimeSum;
+                        }
+                        else
+                        {
+                            item.TotalProgramCost = null;
+                        }
+                    }
+
+                    if (item.UniversityCountryId.HasValue && currencies.TryGetValue(item.UniversityCountryId.Value, out var currCode))
+                    {
+                        item.ProgramCurrency = currCode;
+                    }
+                    else
+                    {
+                        var cName = (item.UniversityCountryName ?? string.Empty).ToLowerInvariant();
+                        item.ProgramCurrency = cName.Contains("kuwait") ? "KWD" : (cName.Contains("kenya") ? "KES" : "SOS");
+                    }
+                }
             }
 
             return new PagedResultDto<StudentProgramApplicationDto>
@@ -1133,6 +1233,71 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
             item.ThirdName,
             item.LastName
                 }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+            var activeAssignment = await _context.KfStudentSponsorshipAssignments
+                .AsNoTracking()
+                .Where(a => a.ApplicationId == applicationId && a.IsActive)
+                .OrderByDescending(a => a.AssignmentId)
+                .Select(a => new
+                {
+                    StudentCategoryId = (long?)a.SponsorshipCategoryMapping.StudentCategoryId,
+                    CategoryName = a.SponsorshipCategoryMapping.StudentCategory.CategoryName,
+                    a.DonorName,
+                    a.DonorCode
+                })
+                .FirstOrDefaultAsync();
+
+            if (activeAssignment != null)
+            {
+                item.SponsorshipCategoryId = activeAssignment.StudentCategoryId;
+                item.SponsorshipCategoryName = activeAssignment.CategoryName;
+                item.DonorName = activeAssignment.DonorName;
+                item.DonorCode = activeAssignment.DonorCode;
+                var isDonor = !string.IsNullOrWhiteSpace(activeAssignment.DonorName) || !string.IsNullOrWhiteSpace(activeAssignment.DonorCode);
+                item.SponsorshipSource = isDonor ? "Donor" : "Direct Aid Pool";
+            }
+
+            var programData = await _context.KfPrograms
+                .AsNoTracking()
+                .Where(p => p.ProgramId == item.ProgramId)
+                .Select(p => new
+                {
+                    p.NumberOfSemesters,
+                    Costs = p.KfProgramCosts
+                        .Select(c => new { c.Amount, c.SponsorshipType.FrequencyType })
+                        .ToList()
+                })
+                .FirstOrDefaultAsync();
+
+            if (programData != null && programData.Costs.Any())
+            {
+                var recurringSum = programData.Costs.Where(c => c.FrequencyType != 1).Sum(c => c.Amount);
+                var oneTimeSum = programData.Costs.Where(c => c.FrequencyType == 1).Sum(c => c.Amount);
+                item.TotalProgramCost = (recurringSum * programData.NumberOfSemesters) + oneTimeSum;
+            }
+            else
+            {
+                item.TotalProgramCost = null;
+            }
+
+            if (item.UniversityCountryId.HasValue)
+            {
+                var curr = await _context.ZzMasterCurrencies
+                    .AsNoTracking()
+                    .Where(c => c.IsActive && c.CountryId == item.UniversityCountryId.Value)
+                    .Select(c => c.CurrencyCode)
+                    .FirstOrDefaultAsync();
+
+                if (!string.IsNullOrEmpty(curr))
+                {
+                    item.ProgramCurrency = curr;
+                }
+            }
+            if (string.IsNullOrEmpty(item.ProgramCurrency))
+            {
+                var cName = (item.UniversityCountryName ?? string.Empty).ToLowerInvariant();
+                item.ProgramCurrency = cName.Contains("kuwait") ? "KWD" : (cName.Contains("kenya") ? "KES" : "SOS");
+            }
 
             return item;
         }

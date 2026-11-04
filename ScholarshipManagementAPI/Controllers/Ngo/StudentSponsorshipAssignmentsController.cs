@@ -70,6 +70,40 @@ public sealed class StudentSponsorshipAssignmentsController : ControllerBase
         });
     }
 
+    [HttpPost("applications/{applicationId:long}/donor")]
+    public async Task<IActionResult> AssignDonor(
+        long applicationId,
+        [FromBody] AssignDonorSponsorshipRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = await _currentUser.GetCurrentUserAsync();
+        request.ApplicationId = applicationId;
+        var result = await _service.AssignDonorAsync(request, currentUser, cancellationToken);
+
+        return Ok(new ApiResponseDto
+        {
+            Success = true,
+            Result = result,
+            Message = "Donor sponsorship assignment saved successfully."
+        });
+    }
+
+    [HttpPost("donor")]
+    public async Task<IActionResult> AssignDonorDirect(
+        [FromBody] AssignDonorSponsorshipRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = await _currentUser.GetCurrentUserAsync();
+        var result = await _service.AssignDonorAsync(request, currentUser, cancellationToken);
+
+        return Ok(new ApiResponseDto
+        {
+            Success = true,
+            Result = result,
+            Message = "Donor sponsorship assignment saved successfully."
+        });
+    }
+
     [HttpPut("{assignmentId:long}")]
     public async Task<IActionResult> Update(
         long assignmentId,
