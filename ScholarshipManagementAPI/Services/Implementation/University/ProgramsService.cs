@@ -248,7 +248,10 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                             Credits = x.Credits,
                             DisplayOrder = x.DisplayOrder,
                             SemesterNo = x.SemesterNo,
-                            ProgramSemesterId = semesterIdsByNumber[x.SemesterNo]
+                            ProgramSemesterId = semesterIdsByNumber.TryGetValue(x.SemesterNo, out var sId) ? sId : (long?)null,
+                            IsActive = x.IsActive ?? true,
+                            CreatedBy = dto.CreatedBy,
+                            CreatedDate = DateTime.UtcNow
                         })
                         .ToList();
 
@@ -503,28 +506,75 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     _context.KfProgramCosts.AddRange(costs);
                 }
 
-                // Courses
-                var oldCourses = _context.KfProgramCourses
-                    .Where(x => x.ProgramId == entity.ProgramId);
+                // Courses - sync preserving active/inactive state and enrollment history
+                var existingCourses = await _context.KfProgramCourses
+                    .Include(x => x.KfStudentCourseEnrollments)
+                    .Where(x => x.ProgramId == entity.ProgramId)
+                    .ToListAsync();
 
-                _context.KfProgramCourses.RemoveRange(oldCourses);
+                var requestedCourses = dto.Courses ?? new List<ProgramCourseDto>();
+                var matchedExistingIds = new HashSet<long>();
 
-                if (dto.Courses?.Any() == true)
+                foreach (var reqCourse in requestedCourses)
                 {
-                    var courses = dto.Courses
-                        .Select(x => new KfProgramCourse
+                    var existing = existingCourses.FirstOrDefault(x =>
+                        (reqCourse.ProgramCourseId.HasValue && reqCourse.ProgramCourseId.Value > 0 && x.ProgramCourseId == reqCourse.ProgramCourseId.Value) ||
+                        (!reqCourse.ProgramCourseId.HasValue && x.CourseId == reqCourse.CourseId && x.SemesterNo == reqCourse.SemesterNo));
+
+                    var programSemesterId = semesterIdsByNumber.TryGetValue(reqCourse.SemesterNo, out var sId) ? sId : (long?)null;
+
+                    if (existing != null)
+                    {
+                        matchedExistingIds.Add(existing.ProgramCourseId);
+                        existing.CourseType = reqCourse.CourseType;
+                        existing.Credits = reqCourse.Credits;
+                        existing.DisplayOrder = reqCourse.DisplayOrder;
+                        existing.SemesterNo = reqCourse.SemesterNo;
+                        existing.ProgramSemesterId = programSemesterId;
+                        existing.UpdatedBy = dto.UpdatedBy ?? entity.UpdatedBy;
+                        existing.UpdatedDate = DateTime.UtcNow;
+
+                        // Preserve existing active/inactive state unless explicitly overridden
+                        if (reqCourse.IsActive.HasValue)
+                        {
+                            existing.IsActive = reqCourse.IsActive.Value;
+                        }
+                    }
+                    else
+                    {
+                        var newMapping = new KfProgramCourse
                         {
                             ProgramId = entity.ProgramId,
-                            CourseId = x.CourseId,
-                            CourseType = x.CourseType,
-                            Credits = x.Credits,
-                            DisplayOrder = x.DisplayOrder,
-                            SemesterNo = x.SemesterNo,
-                            ProgramSemesterId = semesterIdsByNumber[x.SemesterNo]
-                        })
-                        .ToList();
+                            CourseId = reqCourse.CourseId,
+                            CourseType = reqCourse.CourseType,
+                            Credits = reqCourse.Credits,
+                            DisplayOrder = reqCourse.DisplayOrder,
+                            SemesterNo = reqCourse.SemesterNo,
+                            ProgramSemesterId = programSemesterId,
+                            IsActive = reqCourse.IsActive ?? true, // Newly added courses are active by default
+                            CreatedBy = dto.UpdatedBy ?? entity.CreatedBy,
+                            CreatedDate = DateTime.UtcNow
+                        };
+                        _context.KfProgramCourses.Add(newMapping);
+                    }
+                }
 
-                    _context.KfProgramCourses.AddRange(courses);
+                var unreferencedCourses = existingCourses
+                    .Where(x => !matchedExistingIds.Contains(x.ProgramCourseId))
+                    .ToList();
+
+                foreach (var unrefCourse in unreferencedCourses)
+                {
+                    if (unrefCourse.KfStudentCourseEnrollments.Any())
+                    {
+                        unrefCourse.IsActive = false;
+                        unrefCourse.UpdatedBy = dto.UpdatedBy ?? entity.UpdatedBy;
+                        unrefCourse.UpdatedDate = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        _context.KfProgramCourses.Remove(unrefCourse);
+                    }
                 }
 
                 await _context.SaveChangesAsync();
@@ -722,7 +772,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                             SemesterNo = c.SemesterNo,
                             SemesterName = c.ProgramSemester != null && c.ProgramSemester.SemesterName != null
                                 ? c.ProgramSemester.SemesterName
-                                : $"Semester {c.SemesterNo}"
+                                : $"Semester {c.SemesterNo}",
+                            IsActive = c.IsActive
                         })
                         .ToList()
                 })

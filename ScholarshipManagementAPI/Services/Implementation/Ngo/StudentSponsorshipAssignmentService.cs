@@ -50,16 +50,30 @@ public sealed class StudentSponsorshipAssignmentService : IStudentSponsorshipAss
         LoggedInUserDto currentUser,
         CancellationToken cancellationToken = default)
     {
-        EnsureNgoAccess(currentUser);
         if (applicationId <= 0)
             throw new CustomException("A valid application ID is required.");
 
-        var applicationExists = await _context.KfStudentProgramApplications
+        var application = await _context.KfStudentProgramApplications
             .AsNoTracking()
-            .AnyAsync(x => x.ApplicationId == applicationId, cancellationToken);
+            .Where(x => x.ApplicationId == applicationId)
+            .Select(x => new { x.ApplicationId, x.Program.UniversityId })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        if (!applicationExists)
+        if (application == null)
             throw new CustomException("Application not found.", StatusCodes.Status404NotFound);
+
+        if (currentUser.StaffType != StaffType.Ngo && !currentUser.IsSuperAdmin)
+        {
+            if (currentUser.StaffType == StaffType.University)
+            {
+                if (!currentUser.UniversityIds.Contains(application.UniversityId))
+                    throw new CustomException("Application not found or access denied.", StatusCodes.Status403Forbidden);
+            }
+            else
+            {
+                throw new CustomException("Access denied.", StatusCodes.Status403Forbidden);
+            }
+        }
 
         return await BuildAssignmentViewsAsync(applicationId, cancellationToken);
     }

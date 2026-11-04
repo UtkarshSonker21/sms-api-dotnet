@@ -71,15 +71,25 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
 
                 await _context.SaveChangesAsync();
 
-                if (dto.FacultyIds != null && dto.FacultyIds.Any())
+                var targetFacultyIds = dto.FacultyIds?.Distinct().ToList() ?? new List<long>();
+                if (targetFacultyIds.Count == 0 && dto.Faculties?.Any() == true)
                 {
-                    var courseFaculties = dto.FacultyIds
-                        .Distinct()
+                    targetFacultyIds = dto.Faculties.Select(f => f.FacultyId).Distinct().ToList();
+                }
+
+                var facultyOverrides = dto.Faculties?
+                    .Where(f => f.IsActive.HasValue)
+                    .ToDictionary(f => f.FacultyId, f => f.IsActive!.Value)
+                    ?? new Dictionary<long, bool>();
+
+                if (targetFacultyIds.Any())
+                {
+                    var courseFaculties = targetFacultyIds
                         .Select(facultyId => new KfCourseFaculty
                         {
                             CourseId = entity.CourseId,
                             FacultyId = facultyId,
-                            IsActive = true,
+                            IsActive = facultyOverrides.TryGetValue(facultyId, out var explicitActive) ? explicitActive : true,
                             CreatedDate = DateTime.UtcNow,
                             CreatedBy = entity.CreatedBy,
                             UpdatedBy = null,
@@ -160,38 +170,62 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
 
                 await _context.SaveChangesAsync();
 
-                // Remove old mappings
+                // Sync course-faculty mappings preserving active states
                 var existingMappings = await _context.KfCourseFaculties
                     .Where(x => x.CourseId == entity.CourseId)
                     .ToListAsync();
 
-                if (existingMappings.Any())
+                var targetFacultyIds = dto.FacultyIds?.Distinct().ToList() ?? new List<long>();
+                if (targetFacultyIds.Count == 0 && dto.Faculties?.Any() == true)
                 {
-                    _context.KfCourseFaculties.RemoveRange(existingMappings);
-                    await _context.SaveChangesAsync();
+                    targetFacultyIds = dto.Faculties.Select(f => f.FacultyId).Distinct().ToList();
                 }
 
-                // Add new mappings
-                if (dto.FacultyIds != null && dto.FacultyIds.Any())
+                var facultyOverrides = dto.Faculties?
+                    .Where(f => f.IsActive.HasValue)
+                    .ToDictionary(f => f.FacultyId, f => f.IsActive!.Value)
+                    ?? new Dictionary<long, bool>();
+
+                var existingFacultyIds = new HashSet<long>();
+                foreach (var existing in existingMappings)
                 {
-                    var newMappings = dto.FacultyIds
-                        .Distinct()
+                    if (targetFacultyIds.Contains(existing.FacultyId))
+                    {
+                        existingFacultyIds.Add(existing.FacultyId);
+                        if (facultyOverrides.TryGetValue(existing.FacultyId, out var explicitActive))
+                        {
+                            existing.IsActive = explicitActive;
+                        }
+                        // Otherwise, preserve existing.IsActive as-is!
+                        existing.UpdatedBy = dto.UpdatedBy;
+                        existing.UpdatedDate = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        _context.KfCourseFaculties.Remove(existing);
+                    }
+                }
+
+                var newFacultyIds = targetFacultyIds.Where(id => !existingFacultyIds.Contains(id)).ToList();
+                if (newFacultyIds.Any())
+                {
+                    var newMappings = newFacultyIds
                         .Select(facultyId => new KfCourseFaculty
                         {
                             CourseId = entity.CourseId,
                             FacultyId = facultyId,
-                            IsActive = true,
+                            IsActive = facultyOverrides.TryGetValue(facultyId, out var explicitActive) ? explicitActive : true,
                             CreatedDate = DateTime.UtcNow,
-                            CreatedBy = entity.CreatedBy,
+                            CreatedBy = dto.UpdatedBy ?? entity.CreatedBy,
                             UpdatedBy = null,
                             UpdatedDate = null
                         })
                         .ToList();
 
                     _context.KfCourseFaculties.AddRange(newMappings);
-
-                    await _context.SaveChangesAsync();
                 }
+
+                await _context.SaveChangesAsync();
 
                 await transaction.CommitAsync();
 
@@ -278,7 +312,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     .Select(cf => new CourseFacultyDto
                     {
                         FacultyId = cf.FacultyId,
-                        FacultyName = cf.Faculty.FacultyName
+                        FacultyName = cf.Faculty.FacultyName,
+                        IsActive = cf.IsActive
                     })
                     .ToList(),
 
@@ -361,7 +396,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     .Select(cf => new CourseFacultyDto
                     {
                         FacultyId = cf.FacultyId,
-                        FacultyName = cf.Faculty.FacultyName
+                        FacultyName = cf.Faculty.FacultyName,
+                        IsActive = cf.IsActive
                     })
                     .ToList(),
 

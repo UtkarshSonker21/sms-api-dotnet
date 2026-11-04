@@ -91,10 +91,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                 //     throw new CustomException("University registration is not currently open.");
 
                 var alreadyRegistered = await _context.KfStudentAcademicRegistrations
-                    .AnyAsync(x => x.ApplicationId == dto.ApplicationId);
+                    .AnyAsync(x => x.ApplicationId == dto.ApplicationId &&
+                                   x.ProgramId == application.ProgramId &&
+                                   x.SemesterNo == dto.SemesterNo);
 
                 if (alreadyRegistered)
-                    throw new CustomException("Student has already been registered.");
+                    throw new CustomException("Student is already registered for this semester.");
 
                 var academicRegistration = new KfStudentAcademicRegistration
                 {
@@ -143,6 +145,11 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                 throw new CustomException(
                     "Another registration request was processed concurrently. Refresh the student record before retrying.",
                     StatusCodes.Status409Conflict);
+            }
+            catch (DbUpdateException ex) when (IsAcademicRegistrationDuplicateConflict(ex))
+            {
+                await transaction.RollbackAsync();
+                throw new CustomException("Student is already registered for this semester.", StatusCodes.Status409Conflict);
             }
             catch (DbUpdateException ex) when (IsCourseEnrollmentDuplicateConflict(ex))
             {
@@ -216,12 +223,22 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
             long applicationId,
             LoggedInUserDto currentUser)
         {
-            EnsureUniversityAccess(currentUser);
+            if (currentUser.StaffType != StaffType.University && currentUser.StaffType != StaffType.Ngo && !currentUser.IsSuperAdmin)
+                throw new UnauthorizedAccessException();
 
-            var anchorApplication = await _context.KfStudentProgramApplications
+            if (currentUser.StaffType == StaffType.University && !currentUser.UniversityIds.Any())
+                throw new UnauthorizedAccessException("User is not associated with a university.");
+
+            var anchorQuery = _context.KfStudentProgramApplications
                 .AsNoTracking()
-                .Where(x => x.ApplicationId == applicationId &&
-                            currentUser.UniversityIds.Contains(x.Program.UniversityId))
+                .Where(x => x.ApplicationId == applicationId);
+
+            if (currentUser.StaffType == StaffType.University)
+            {
+                anchorQuery = anchorQuery.Where(x => currentUser.UniversityIds.Contains(x.Program.UniversityId));
+            }
+
+            var anchorApplication = await anchorQuery
                 .Select(x => new
                 {
                     x.ApplicationId,
@@ -232,11 +249,17 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
             if (anchorApplication == null)
                 return null;
 
-            var registrations = await _context.KfStudentAcademicRegistrations
+            var regQuery = _context.KfStudentAcademicRegistrations
                 .AsNoTracking()
                 .Where(x => (x.StudentId == anchorApplication.StudentId ||
-                             x.Application.StudentId == anchorApplication.StudentId) &&
-                            currentUser.UniversityIds.Contains(x.Program.UniversityId))
+                             x.Application.StudentId == anchorApplication.StudentId));
+
+            if (currentUser.StaffType == StaffType.University)
+            {
+                regQuery = regQuery.Where(x => currentUser.UniversityIds.Contains(x.Program.UniversityId));
+            }
+
+            var registrations = await regQuery
                 .Include(x => x.Student)
                 .Include(x => x.Application)
                     .ThenInclude(x => x.Program)
@@ -267,8 +290,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     registration.Application.StudentId != registration.StudentId ||
                     registration.Application.ProgramId != registration.ProgramId ||
                     registration.Program == null ||
-                    !currentUser.UniversityIds.Contains(registration.Program.UniversityId) ||
-                    registration.Application.Program?.UniversityId != registration.Program.UniversityId)
+                    (currentUser.StaffType == StaffType.University && (!currentUser.UniversityIds.Contains(registration.Program.UniversityId) || registration.Application.Program?.UniversityId != registration.Program.UniversityId)))
                 {
                     throw new CustomException(
                         "Academic history contains inconsistent student, application, or program relationships.",
@@ -1236,6 +1258,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                         .ThenInclude(x => x!.AcademicTerm)
                             .ThenInclude(x => x!.AcademicCalendar)
                     .Where(x => x.IsActive &&
+                                x.Course.IsActive &&
                                 ((x.ProgramId == program.ProgramId && x.SemesterNo == nextSemesterNo) ||
                                  x.ProgramSemesterId == nextSemester.ProgramSemesterId))
                     .OrderBy(x => x.DisplayOrder)
@@ -1700,7 +1723,9 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
         {
             var courseMappings = await _context.KfProgramCourses
                 .AsNoTracking()
+                .Include(x => x.Course)
                 .Where(x => x.IsActive &&
+                            x.Course.IsActive &&
                             ((x.ProgramId == programId && x.SemesterNo == semesterNo) ||
                              x.ProgramSemesterId == programSemesterId))
                 .OrderBy(x => x.DisplayOrder)
@@ -1799,6 +1824,23 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                         error.Message.Contains(
                             "UQ_kf_student_failing_core_cases_Registration",
                             StringComparison.OrdinalIgnoreCase)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsAcademicRegistrationDuplicateConflict(DbUpdateException exception)
+        {
+            for (Exception? current = exception; current != null; current = current.InnerException)
+            {
+                if (current is SqlException sqlException &&
+                    sqlException.Errors.Cast<SqlError>().Any(error =>
+                        (error.Number is 2601 or 2627) &&
+                        (error.Message.Contains("kf_student_academic_registrations", StringComparison.OrdinalIgnoreCase) ||
+                         error.Message.Contains("UQ_kf_student_academic_registrations", StringComparison.OrdinalIgnoreCase))))
                 {
                     return true;
                 }

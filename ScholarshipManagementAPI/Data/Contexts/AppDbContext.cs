@@ -154,6 +154,7 @@ public partial class AppDbContext : DbContext
             entity.ToTable("kf_course_faculties");
 
             entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
 
             entity.HasOne(d => d.Course).WithMany(p => p.KfCourseFaculties)
                 .HasForeignKey(d => d.CourseId)
@@ -674,6 +675,9 @@ public partial class AppDbContext : DbContext
         modelBuilder.Entity<KfStudentAcademicRegistration>(entity =>
         {
             entity.ToTable("kf_student_academic_registrations");
+
+            entity.HasIndex(e => new { e.ApplicationId, e.ProgramId, e.SemesterNo }, "UQ_kf_student_academic_registrations_Application_Program_Semester")
+                .IsUnique();
 
             entity.Property(e => e.CreatedOn)
                 .HasDefaultValueSql("(getutcdate())")

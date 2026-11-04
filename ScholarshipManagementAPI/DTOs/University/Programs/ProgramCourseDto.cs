@@ -1,4 +1,4 @@
-﻿namespace ScholarshipManagementAPI.DTOs.University.Programs
+namespace ScholarshipManagementAPI.DTOs.University.Programs
 {
     public class ProgramCourseDto
     {
@@ -19,5 +19,6 @@
 
         public int SemesterNo { get; set; }
         public string SemesterName { get; set; } = string.Empty;
+        public bool? IsActive { get; set; }
     }
 }
