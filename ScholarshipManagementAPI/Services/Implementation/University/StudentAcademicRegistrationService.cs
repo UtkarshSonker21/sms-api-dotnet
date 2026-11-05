@@ -40,7 +40,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
 
             // Serialize the duplicate check with concurrent initial-registration requests.
             // This is a code-level safeguard; a matching database uniqueness constraint still requires separate review.
-            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            var transaction = ownsTransaction ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
 
             try
             {
@@ -467,7 +468,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                             SemesterGpa = registration.KfStudentSemesterResult.SemesterGpa,
                             SubmissionStatus = registration.KfStudentSemesterResult.SubmissionStatus,
                             CreatedOn = registration.KfStudentSemesterResult.CreatedOn,
-                            UpdatedOn = registration.KfStudentSemesterResult.UpdatedOn,
+                            UpdatedOn = registration.KfStudentSemesterResult.UpdatedOn ?? registration.KfStudentSemesterResult.CreatedOn,
                             SubmittedOn = registration.KfStudentSemesterResult.SubmittedOn
                         },
                     Courses = courseDtos
@@ -509,7 +510,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
         {
             EnsureUniversityAccess(currentUser);
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            var transaction = ownsTransaction ? await _context.Database.BeginTransactionAsync() : null;
 
             try
             {
@@ -582,7 +584,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                             StatusCodes.Status409Conflict);
                     }
 
-                    if (dto.ExpectedUpdatedOn != semesterResult.UpdatedOn)
+                    var currentTimestamp = semesterResult.UpdatedOn ?? semesterResult.CreatedOn;
+                    if (!TimestampsMatch(dto.ExpectedUpdatedOn, currentTimestamp))
                         throw new CustomException(
                             "These draft results changed after they were loaded. Reload the latest results before saving again.",
                             StatusCodes.Status409Conflict);
@@ -602,7 +605,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                             CourseResultsCreated = 0,
                             CourseResultsAlreadyPresent = existingCourseResults.Count,
                             SemesterResultCreated = false,
-                            SubmissionStatus = semesterResult.SubmissionStatus
+                            SubmissionStatus = semesterResult.SubmissionStatus,
+                            ExpectedUpdatedOn = semesterResult.UpdatedOn ?? semesterResult.CreatedOn
                         };
                     }
 
@@ -682,7 +686,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     CourseResultsCreated = registration.KfStudentCourseEnrollments.Count,
                     CourseResultsAlreadyPresent = 0,
                     SemesterResultCreated = true,
-                    SubmissionStatus = "Draft"
+                    SubmissionStatus = "Draft",
+                    ExpectedUpdatedOn = now
                 };
             }
             catch (DbUpdateException ex) when (IsAcademicResultDuplicateConflict(ex))
@@ -762,7 +767,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
             {
                 AcademicRegistrationId = academicRegistrationId,
                 TotalRows = workbook.Rows.Count,
-                ExpectedUpdatedOn = registration.KfStudentSemesterResult?.UpdatedOn,
+                ExpectedUpdatedOn = registration.KfStudentSemesterResult?.UpdatedOn ?? registration.KfStudentSemesterResult?.CreatedOn,
                 PreviewToken = previewToken,
                 Message = workbook.FileErrors.FirstOrDefault()
             };
@@ -873,7 +878,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                 {
                     SemesterGpa = sharedGpa,
                     InternalNote = sharedNote,
-                    ExpectedUpdatedOn = registration.KfStudentSemesterResult?.UpdatedOn,
+                    ExpectedUpdatedOn = registration.KfStudentSemesterResult?.UpdatedOn ?? registration.KfStudentSemesterResult?.CreatedOn,
                     CourseResults = mappedResults
                 });
             }
@@ -888,7 +893,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
         {
             EnsureUniversityAccess(currentUser);
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            var transaction = ownsTransaction ? await _context.Database.BeginTransactionAsync() : null;
 
             try
             {
@@ -917,7 +923,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                         StatusCodes.Status409Conflict);
                 }
 
-                if (dto.ExpectedUpdatedOn != semesterResult.UpdatedOn)
+                var currentFinalizeTimestamp = semesterResult.UpdatedOn ?? semesterResult.CreatedOn;
+                if (!TimestampsMatch(dto.ExpectedUpdatedOn, currentFinalizeTimestamp))
                 {
                     throw new CustomException(
                         "These Draft results changed after they were loaded. Reload the latest results before finalizing.",
@@ -999,27 +1006,33 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
 
                 // Return the value as persisted, including any SQL Server datetime precision rounding.
                 await _context.Entry(semesterResult).ReloadAsync();
-                await transaction.CommitAsync();
+                if (ownsTransaction && transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
 
                 return MapAcademicRegistrationResults(registration);
             }
             catch (DbUpdateConcurrencyException)
             {
-                await TryRollbackFinalizationAsync(transaction);
+                if (ownsTransaction && transaction != null)
+                    await TryRollbackFinalizationAsync(transaction);
                 throw new CustomException(
                     "These Draft results changed concurrently. Reload the latest results before finalizing.",
                     StatusCodes.Status409Conflict);
             }
             catch (DbUpdateException ex) when (IsFailingCoreCaseDuplicateConflict(ex))
             {
-                await TryRollbackFinalizationAsync(transaction);
+                if (ownsTransaction && transaction != null)
+                    await TryRollbackFinalizationAsync(transaction);
                 throw new CustomException(
                     "A failing-core case was created concurrently for this academic registration. Reload the academic record.",
                     StatusCodes.Status409Conflict);
             }
             catch
             {
-                await TryRollbackFinalizationAsync(transaction);
+                if (ownsTransaction && transaction != null)
+                    await TryRollbackFinalizationAsync(transaction);
                 throw;
             }
         }
@@ -1031,7 +1044,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
         {
             EnsureUniversityAccess(currentUser);
 
-            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            var transaction = ownsTransaction ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
 
             try
             {
@@ -1108,7 +1122,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
 
                 var semesterResult = registration.KfStudentSemesterResult;
                 if (semesterResult == null ||
-                    !string.Equals(semesterResult.SubmissionStatus, FinalizedSubmissionStatus, StringComparison.Ordinal) ||
+                    (!string.Equals(semesterResult.SubmissionStatus, FinalizedSubmissionStatus, StringComparison.Ordinal) &&
+                     !string.Equals(semesterResult.SubmissionStatus, "Submitted", StringComparison.Ordinal)) ||
                     !semesterResult.SubmittedBy.HasValue ||
                     !semesterResult.SubmittedOn.HasValue)
                 {
@@ -1529,6 +1544,24 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                             .ThenInclude(x => x.StudentCourseEnrollment)
                                 .ThenInclude(x => x.AcademicRegistration)
                 .FirstOrDefaultAsync(x => x.Id == academicRegistrationId);
+        }
+
+        private static bool TimestampsMatch(DateTime? expected, DateTime? actual)
+        {
+            if (!expected.HasValue && !actual.HasValue) return true;
+            if (!expected.HasValue || !actual.HasValue) return false;
+
+            var expUtc = expected.Value.Kind == DateTimeKind.Local
+                ? expected.Value.ToUniversalTime()
+                : DateTime.SpecifyKind(expected.Value, DateTimeKind.Utc);
+
+            var actUtc = actual.Value.Kind == DateTimeKind.Local
+                ? actual.Value.ToUniversalTime()
+                : DateTime.SpecifyKind(actual.Value, DateTimeKind.Utc);
+
+            if (expUtc == actUtc) return true;
+
+            return Math.Abs((expUtc - actUtc).TotalMilliseconds) < 1.0;
         }
 
         private static void EnsureUniversityAccess(LoggedInUserDto currentUser)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using ScholarshipManagementAPI.Data.DbModels;
@@ -1030,7 +1030,10 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("SemesterGPA");
             entity.Property(e => e.SubmissionStatus)
                 .HasMaxLength(20)
-                .HasDefaultValue("Draft");
+                .HasDefaultValue("Draft")
+                .HasConversion(
+                    v => (v == "Finalized" || v == "Submitted") ? "Submitted" : v,
+                    v => (v == "Submitted" || v == "Finalized") ? "Finalized" : v);
 
             entity.HasOne(d => d.AcademicRegistration).WithOne(p => p.KfStudentSemesterResult)
                 .HasForeignKey<KfStudentSemesterResult>(d => d.AcademicRegistrationId)

@@ -1,3 +1,5 @@
+using System;
+
 namespace ScholarshipManagementAPI.DTOs.University.AcademicRegistration
 {
     public class AcademicResultsSaveSummaryDto
@@ -11,5 +13,7 @@ namespace ScholarshipManagementAPI.DTOs.University.AcademicRegistration
         public bool SemesterResultCreated { get; set; }
 
         public string SubmissionStatus { get; set; } = "Draft";
+
+        public DateTime? ExpectedUpdatedOn { get; set; }
     }
 }

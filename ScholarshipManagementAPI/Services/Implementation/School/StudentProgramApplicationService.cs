@@ -1092,8 +1092,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                     {
                         var currentReg = studentRegs.Last();
                         item.CurrentSemesterNo = currentReg.SemesterNo;
-                        item.CurrentSemesterStatus = currentReg.KfStudentSemesterResult?.SubmissionStatus == "Finalized" ? "Completed" : "Active";
-                        item.SemestersCompleted = studentRegs.Count(r => r.KfStudentSemesterResult?.SubmissionStatus == "Finalized");
+                        item.CurrentSemesterStatus = (currentReg.KfStudentSemesterResult?.SubmissionStatus == "Finalized" || currentReg.KfStudentSemesterResult?.SubmissionStatus == "Submitted") ? "Completed" : "Active";
+                        item.SemestersCompleted = studentRegs.Count(r => r.KfStudentSemesterResult?.SubmissionStatus == "Finalized" || r.KfStudentSemesterResult?.SubmissionStatus == "Submitted");
                         item.RegistrationDate = currentReg.RegistrationDate;
 
                         var allEnrollments = studentRegs.SelectMany(r => r.KfStudentCourseEnrollments).ToList();
@@ -1346,8 +1346,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 {
                     var currentReg = studentRegs.Last();
                     item.CurrentSemesterNo = currentReg.SemesterNo;
-                    item.CurrentSemesterStatus = currentReg.KfStudentSemesterResult?.SubmissionStatus == "Finalized" ? "Completed" : "Active";
-                    item.SemestersCompleted = studentRegs.Count(r => r.KfStudentSemesterResult?.SubmissionStatus == "Finalized");
+                    item.CurrentSemesterStatus = (currentReg.KfStudentSemesterResult?.SubmissionStatus == "Finalized" || currentReg.KfStudentSemesterResult?.SubmissionStatus == "Submitted") ? "Completed" : "Active";
+                    item.SemestersCompleted = studentRegs.Count(r => r.KfStudentSemesterResult?.SubmissionStatus == "Finalized" || r.KfStudentSemesterResult?.SubmissionStatus == "Submitted");
                     item.RegistrationDate = currentReg.RegistrationDate;
 
                     var allEnrollments = studentRegs.SelectMany(r => r.KfStudentCourseEnrollments).ToList();
