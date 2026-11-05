@@ -123,4 +123,13 @@ public class StudentProgramApplicationDto
         public long? StudentCategoryId { get => SponsorshipCategoryId; set => SponsorshipCategoryId = value; }
         public string? CategoryName { get => SponsorshipCategoryName; set => SponsorshipCategoryName = value; }
 
+        // Academic Progress for Registered Students
+        public int? CurrentSemesterNo { get; set; }
+        public string? CurrentSemesterStatus { get; set; }
+        public int? SemestersCompleted { get; set; }
+        public int? TotalSemesters { get; set; }
+        public int? CreditsCompleted { get; set; }
+        public int? GraduationCredits { get; set; }
+        public int? CurrentSemesterCredits { get; set; }
+        public DateTime? RegistrationDate { get; set; }
 }

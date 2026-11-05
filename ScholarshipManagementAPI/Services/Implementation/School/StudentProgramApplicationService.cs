@@ -1022,11 +1022,35 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                     {
                         p.ProgramId,
                         p.NumberOfSemesters,
+                        p.CreditsRequired,
                         Costs = p.KfProgramCosts
                             .Select(c => new { c.Amount, c.SponsorshipType.FrequencyType })
                             .ToList()
                     })
                     .ToDictionaryAsync(p => p.ProgramId, p => p);
+
+                var registeredAppIds = items
+                    .Where(x => x.ApplicationStatusId == (int)StudentApplicationStatus.Registered)
+                    .Select(x => x.ApplicationId)
+                    .ToList();
+
+                List<KfStudentAcademicRegistration> registrations = new();
+                if (registeredAppIds.Any())
+                {
+                    registrations = await _context.KfStudentAcademicRegistrations
+                        .AsNoTracking()
+                        .Where(r => registeredAppIds.Contains(r.ApplicationId))
+                        .Include(r => r.KfStudentSemesterResult)
+                        .Include(r => r.KfStudentCourseEnrollments)
+                            .ThenInclude(e => e.ProgramCourse)
+                        .Include(r => r.KfStudentCourseEnrollments)
+                            .ThenInclude(e => e.KfStudentCourseResult)
+                        .ToListAsync();
+                }
+
+                var registrationsByApp = registrations
+                    .GroupBy(r => r.ApplicationId)
+                    .ToDictionary(g => g.Key, g => g.OrderBy(r => r.SemesterNo).ToList());
 
                 var countryIds = items.Where(x => x.UniversityCountryId.HasValue).Select(x => x.UniversityCountryId!.Value).Distinct().ToList();
                 var currencies = await _context.ZzMasterCurrencies
@@ -1049,6 +1073,9 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
 
                     if (programsData.TryGetValue(item.ProgramId, out var pInfo))
                     {
+                        item.TotalSemesters = pInfo.NumberOfSemesters > 0 ? pInfo.NumberOfSemesters : null;
+                        item.GraduationCredits = pInfo.CreditsRequired > 0 ? pInfo.CreditsRequired : null;
+
                         if (pInfo.Costs.Any())
                         {
                             var recurringSum = pInfo.Costs.Where(c => c.FrequencyType != 1).Sum(c => c.Amount);
@@ -1059,6 +1086,21 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                         {
                             item.TotalProgramCost = null;
                         }
+                    }
+
+                    if (registrationsByApp.TryGetValue(item.ApplicationId, out var studentRegs) && studentRegs.Any())
+                    {
+                        var currentReg = studentRegs.Last();
+                        item.CurrentSemesterNo = currentReg.SemesterNo;
+                        item.CurrentSemesterStatus = currentReg.KfStudentSemesterResult?.SubmissionStatus == "Finalized" ? "Completed" : "Active";
+                        item.SemestersCompleted = studentRegs.Count(r => r.KfStudentSemesterResult?.SubmissionStatus == "Finalized");
+                        item.RegistrationDate = currentReg.RegistrationDate;
+
+                        var allEnrollments = studentRegs.SelectMany(r => r.KfStudentCourseEnrollments).ToList();
+                        var passedEnrollments = allEnrollments.Where(e => e.KfStudentCourseResult?.IsPassed == true).ToList();
+                        item.CreditsCompleted = passedEnrollments.Sum(e => e.ProgramCourse?.Credits ?? 0);
+
+                        item.CurrentSemesterCredits = currentReg.KfStudentCourseEnrollments.Sum(e => e.ProgramCourse?.Credits ?? 0);
                     }
 
                     if (item.UniversityCountryId.HasValue && currencies.TryGetValue(item.UniversityCountryId.Value, out var currCode))
@@ -1263,21 +1305,57 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 .Select(p => new
                 {
                     p.NumberOfSemesters,
+                    p.CreditsRequired,
                     Costs = p.KfProgramCosts
                         .Select(c => new { c.Amount, c.SponsorshipType.FrequencyType })
                         .ToList()
                 })
                 .FirstOrDefaultAsync();
 
-            if (programData != null && programData.Costs.Any())
+            if (programData != null)
             {
-                var recurringSum = programData.Costs.Where(c => c.FrequencyType != 1).Sum(c => c.Amount);
-                var oneTimeSum = programData.Costs.Where(c => c.FrequencyType == 1).Sum(c => c.Amount);
-                item.TotalProgramCost = (recurringSum * programData.NumberOfSemesters) + oneTimeSum;
+                item.TotalSemesters = programData.NumberOfSemesters > 0 ? programData.NumberOfSemesters : null;
+                item.GraduationCredits = programData.CreditsRequired > 0 ? programData.CreditsRequired : null;
+
+                if (programData.Costs.Any())
+                {
+                    var recurringSum = programData.Costs.Where(c => c.FrequencyType != 1).Sum(c => c.Amount);
+                    var oneTimeSum = programData.Costs.Where(c => c.FrequencyType == 1).Sum(c => c.Amount);
+                    item.TotalProgramCost = (recurringSum * programData.NumberOfSemesters) + oneTimeSum;
+                }
+                else
+                {
+                    item.TotalProgramCost = null;
+                }
             }
-            else
+
+            if (item.ApplicationStatusId == (int)StudentApplicationStatus.Registered)
             {
-                item.TotalProgramCost = null;
+                var studentRegs = await _context.KfStudentAcademicRegistrations
+                    .AsNoTracking()
+                    .Where(r => r.ApplicationId == item.ApplicationId)
+                    .Include(r => r.KfStudentSemesterResult)
+                    .Include(r => r.KfStudentCourseEnrollments)
+                        .ThenInclude(e => e.ProgramCourse)
+                    .Include(r => r.KfStudentCourseEnrollments)
+                        .ThenInclude(e => e.KfStudentCourseResult)
+                    .OrderBy(r => r.SemesterNo)
+                    .ToListAsync();
+
+                if (studentRegs.Any())
+                {
+                    var currentReg = studentRegs.Last();
+                    item.CurrentSemesterNo = currentReg.SemesterNo;
+                    item.CurrentSemesterStatus = currentReg.KfStudentSemesterResult?.SubmissionStatus == "Finalized" ? "Completed" : "Active";
+                    item.SemestersCompleted = studentRegs.Count(r => r.KfStudentSemesterResult?.SubmissionStatus == "Finalized");
+                    item.RegistrationDate = currentReg.RegistrationDate;
+
+                    var allEnrollments = studentRegs.SelectMany(r => r.KfStudentCourseEnrollments).ToList();
+                    var passedEnrollments = allEnrollments.Where(e => e.KfStudentCourseResult?.IsPassed == true).ToList();
+                    item.CreditsCompleted = passedEnrollments.Sum(e => e.ProgramCourse?.Credits ?? 0);
+
+                    item.CurrentSemesterCredits = currentReg.KfStudentCourseEnrollments.Sum(e => e.ProgramCourse?.Credits ?? 0);
+                }
             }
 
             if (item.UniversityCountryId.HasValue)
