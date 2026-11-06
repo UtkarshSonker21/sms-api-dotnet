@@ -423,6 +423,24 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
 
             if (app == null)
             {
+                app = await _context.KfStudentProgramApplications
+                    .AsNoTracking()
+                    .Include(a => a.Student)
+                    .Include(a => a.Program)
+                        .ThenInclude(p => p.University)
+                    .Include(a => a.Program)
+                        .ThenInclude(p => p.Faculty)
+                    .Include(a => a.Program)
+                        .ThenInclude(p => p.KfProgramDocuments)
+                            .ThenInclude(pd => pd.DocumentType)
+                    .Include(a => a.KfStudentProgramDocuments)
+                        .ThenInclude(d => d.DocumentType)
+                    .OrderByDescending(x => x.ApplicationId)
+                    .FirstOrDefaultAsync(x => x.StudentId == applicationId);
+            }
+
+            if (app == null)
+            {
                 return null;
             }
 
@@ -580,7 +598,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 var storedFileName =
                     $"{Guid.NewGuid():N}{extension}";
 
-                
+
                 var physicalPath = Path.Combine(folder, storedFileName);
 
                 var relativePath =
@@ -791,6 +809,23 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.StudentId == studentId && x.IsActive);
 
+            long? resolvedApplicationId = null;
+
+            if (studentExists == null)
+            {
+                var app = await _context.KfStudentProgramApplications
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.ApplicationId == studentId);
+                if (app != null)
+                {
+                    resolvedApplicationId = app.ApplicationId;
+                    studentId = app.StudentId;
+                    studentExists = await _context.KfStudentRegistrations
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.StudentId == studentId && x.IsActive);
+                }
+            }
+
             if (studentExists == null)
             {
                 throw new CustomException("Student not found.");
@@ -802,9 +837,19 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                     throw new UnauthorizedAccessException();
             }
 
-            return await _context.KfStudentHistories
+            if (!resolvedApplicationId.HasValue)
+            {
+                var app = await _context.KfStudentProgramApplications
+                    .AsNoTracking()
+                    .Where(x => x.StudentId == studentId)
+                    .OrderByDescending(x => x.ApplicationId)
+                    .FirstOrDefaultAsync();
+                resolvedApplicationId = app?.ApplicationId;
+            }
+
+            var list = await _context.KfStudentHistories
                 .AsNoTracking()
-                .Where(x => x.StudentId == studentId)
+                .Where(x => x.StudentId == studentId || (resolvedApplicationId.HasValue && x.ApplicationId == resolvedApplicationId.Value))
                 .OrderByDescending(x => x.CreatedDate)
                 .Select(x => new StudentHistoryResponseDto
                 {
@@ -821,6 +866,71 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                     CreatedDate = x.CreatedDate
                 })
                 .ToListAsync();
+
+            // Include failing-core case submissions and decisions for this student
+            var failingCoreCases = await _context.KfStudentFailingCoreCases
+                .AsNoTracking()
+                .Include(c => c.AcademicRegistration)
+                .Include(c => c.KfStudentFailingCoreCaseCourses)
+                    .ThenInclude(cc => cc.StudentCourseResult)
+                        .ThenInclude(scr => scr.StudentCourseEnrollment)
+                            .ThenInclude(sce => sce.ProgramCourse)
+                                .ThenInclude(pc => pc.Course)
+                .Where(c => c.AcademicRegistration.StudentId == studentId ||
+                            (resolvedApplicationId.HasValue && c.AcademicRegistration.ApplicationId == resolvedApplicationId.Value))
+                .ToListAsync();
+
+            foreach (var fc in failingCoreCases)
+            {
+                if (!list.Any(h => h.Title != null && h.Title.Contains("Failing-Core", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var courseNames = fc.KfStudentFailingCoreCaseCourses
+                        .Select(cc => cc.StudentCourseResult?.StudentCourseEnrollment?.ProgramCourse?.Course?.CourseNameEn)
+                        .Where(cn => !string.IsNullOrWhiteSpace(cn))
+                        .ToList();
+                    var desc = courseNames.Count > 0
+                        ? $"Failed core course(s) review requested: {string.Join(", ", courseNames)}"
+                        : "Failing core course review submitted to Direct Aid Committee";
+
+                    list.Add(new StudentHistoryResponseDto
+                    {
+                        StudentId = studentId,
+                        ApplicationId = fc.AcademicRegistration.ApplicationId,
+                        Title = "Failing-Core Case Submitted",
+                        Description = desc,
+                        CreatedDate = fc.SubmittedOn,
+                        CreatedBy = fc.CreatedBy
+                    });
+                }
+
+                if (fc.DecisionOn.HasValue || (!string.IsNullOrEmpty(fc.Status) && !string.Equals(fc.Status, "Pending", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var isApproved = string.Equals(fc.Status, "Approved", StringComparison.OrdinalIgnoreCase);
+                    var isDenied = string.Equals(fc.Status, "Denied", StringComparison.OrdinalIgnoreCase);
+                    var title = isApproved
+                        ? "Continuation Approved by Committee"
+                        : (isDenied ? "Continuation Denied by Committee" : $"Committee Decision: {fc.Status}");
+
+                    if (!list.Any(h => h.Title != null && (h.Title.Contains("Continuation", StringComparison.OrdinalIgnoreCase) || h.Title.Contains("Committee Decision", StringComparison.OrdinalIgnoreCase))))
+                    {
+                        list.Add(new StudentHistoryResponseDto
+                        {
+                            StudentId = studentId,
+                            ApplicationId = fc.AcademicRegistration.ApplicationId,
+                            Title = title,
+                            Description = fc.DecisionComment ?? "Committee decision recorded",
+                            CreatedDate = fc.DecisionOn ?? fc.CreatedOn,
+                            CreatedBy = fc.DecisionBy ?? fc.CreatedBy
+                        });
+                    }
+                }
+            }
+
+            return list
+                .GroupBy(x => new { Title = x.Title?.Trim().ToLowerInvariant(), x.CreatedDate })
+                .Select(g => g.First())
+                .OrderByDescending(x => x.CreatedDate)
+                .ToList();
         }
 
 
@@ -828,7 +938,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
 
 
         // ======================================================
-        // Search Student Program Application and change status 
+        // Search Student Program Application and change status
         // via University or NGO staff
         // ======================================================
 
@@ -1129,7 +1239,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
         {
             var query = _context.KfStudentProgramApplications
                 .AsNoTracking()
-                .Where(x => x.ApplicationId == applicationId);
+                .Where(x => x.ApplicationId == applicationId || x.StudentId == applicationId);
 
             switch (currentUser.StaffType)
             {
@@ -1265,7 +1375,139 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
                 .FirstOrDefaultAsync();
 
             if (item == null)
+            {
+                var studentFallbackQuery = _context.KfStudentProgramApplications
+                    .AsNoTracking()
+                    .Where(x => x.StudentId == applicationId);
+
+                switch (currentUser.StaffType)
+                {
+                    case StaffType.University:
+                        studentFallbackQuery = studentFallbackQuery.Where(x =>
+                                currentUser.UniversityIds.Contains(x.Program.UniversityId) &&
+                                x.ApplicationStatus >= (int)StudentApplicationStatus.AcceptanceInProcess);
+                        break;
+
+                    case StaffType.Ngo:
+                        studentFallbackQuery = studentFallbackQuery.Where(x =>
+                                x.ApplicationStatus >= (int)StudentApplicationStatus.Awarded);
+                        break;
+                }
+
+                item = await studentFallbackQuery
+                    .OrderByDescending(x => x.ApplicationId)
+                    .Select(x => new StudentProgramApplicationDto
+                    {
+                        StudentId = x.StudentId,
+                        StudentCode = x.Student.StudentCode,
+                        PhotoPath = x.Student.PhotoPath,
+
+                        FirstName = x.Student.FirstName,
+                        SecondName = x.Student.SecondName,
+                        ThirdName = x.Student.ThirdName,
+                        LastName = x.Student.LastName,
+
+                        MotherName = x.Student.MotherName,
+                        DateOfBirth = x.Student.Dob.HasValue
+                            ? x.Student.Dob.Value.ToDateTime(TimeOnly.MinValue)
+                            : null,
+
+                        GenderId = x.Student.GenderId,
+                        GenderName = x.Student.Gender != null ? x.Student.Gender.DisplayText : null,
+
+                        ReligionId = x.Student.ReligionId,
+                        ReligionName = x.Student.Religion != null ? x.Student.Religion.DisplayText : null,
+
+                        Nationality = x.Student.Nationality != null ? x.Student.Nationality.CountryName : null,
+                        CountryOfResidence = x.Student.ResidenceCountry != null ? x.Student.ResidenceCountry.CountryName : null,
+
+                        IsDirectAidOrphan = x.Student.IsOrphan,
+                        OrphanNumber = x.Student.OrphanNumber,
+
+                        PhoneNumber = x.Student.Phone,
+                        EmailAddress = x.Student.Email,
+
+                        City = x.Student.City,
+                        Village = x.Student.Village,
+                        Block = x.Student.Block,
+                        Street = x.Student.Street,
+
+                        SchoolId = x.Student.SchoolId,
+                        SchoolName = x.Student.School != null ? x.Student.School.SchoolName : null,
+
+                        HighSchoolTotalScore = x.Student.TotalScore,
+                        HighSchoolMaxScore = x.Student.MaxScore,
+                        HighSchoolRelativeGradeOrPercentage = x.Student.RelativeGrade,
+                        EnglishScore = x.Student.EnglishScore,
+                        HsSpecialization = x.Student.HsSpecialization,
+                        TanzanianStudentCombination = x.Student.TanzanianStudentCombination,
+
+                        ApplicationId = x.ApplicationId,
+                        ApplicationStatusId = x.ApplicationStatus,
+                        ApplicationStatusName = ((StudentApplicationStatus)x.ApplicationStatus).ToString(),
+                        ActionDate = x.UpdatedDate ?? x.SubmittedDate ?? x.AppliedDate,
+                        Notes = x.Remarks,
+
+                        ProgramId = x.ProgramId,
+                        ProgramName = x.Program.ProgramName,
+                        ProgramCode = x.Program.ProgramCode,
+
+                        FacultyId = x.Program.FacultyId,
+                        FacultyName = x.Program.Faculty.FacultyName,
+
+                        UniversityId = x.Program.UniversityId,
+                        UniversityName = x.Program.University.UniversityName,
+
+                        // Personal Information - Additional
+                        Tribe = x.Student.Tribe,
+
+                        // Address
+                        House = x.Student.House,
+
+                        // Student Source
+                        FromDaSchool = x.Student.FromDaSchool,
+                        DaStudentCode = x.Student.DaStudentCode,
+
+                        // Behavioral & Social Evaluation
+                        FinancialNeedStatusId = x.Student.FinancialNeedStatusId,
+                        FinancialNeedStatusName = x.Student.FinancialNeedStatus != null
+                        ? x.Student.FinancialNeedStatus.DisplayText : null,
+
+                        SelfRelianceLevelId = x.Student.SelfRelianceLevelId,
+                        SelfRelianceLevelName = x.Student.SelfRelianceLevel != null
+                        ? x.Student.SelfRelianceLevel.DisplayText : null,
+
+                        MotivationLevelId = x.Student.MotivationLevelId,
+                        MotivationLevelName = x.Student.MotivationLevel != null
+                        ? x.Student.MotivationLevel.DisplayText : null,
+
+                        FutureGoalsLevelId = x.Student.FutureGoalsLevelId,
+                        FutureGoalsLevelName = x.Student.FutureGoalsLevel != null
+                        ? x.Student.FutureGoalsLevel.DisplayText : null,
+
+                        // Transfer Student Information
+                        TransferInstitution = x.Student.TransferInstitution,
+                        TransferProgram = x.Student.TransferProgram,
+                        TransferInstitutionType = x.Student.TransferInstitutionType,
+                        TransferCredits = x.Student.TransferCredits,
+
+                        TransferLastSemEnd = x.Student.TransferLastSemEnd.HasValue
+                        ? x.Student.TransferLastSemEnd.Value.ToDateTime(TimeOnly.MinValue) : null,
+
+                        TransferGpa = x.Student.TransferGpa,
+
+                        // Recommendation
+                        RecommendationLetterPath = x.Student.RecommendationLetterPath,
+                        RecommendationLetterNotes = x.Student.RecommendationLetterNotes,
+
+                    })
+                    .FirstOrDefaultAsync();
+            }
+
+            if (item == null)
                 return null;
+
+            applicationId = item.ApplicationId;
 
             item.FullName = string.Join(" ",
                 new[]
@@ -1494,7 +1736,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.School
         {
             return status switch
             {
-                StudentApplicationStatus.Draft  => 
+                StudentApplicationStatus.Draft  =>
                     "Student started a new program application.",
 
                 StudentApplicationStatus.Accepted =>

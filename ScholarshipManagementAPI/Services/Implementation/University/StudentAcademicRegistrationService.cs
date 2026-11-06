@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
@@ -75,7 +75,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
 
                 var programSemester = matchingSemesters[0];
 
-                // TEMPORARILY DISABLED — DO NOT DELETE.
+                // TEMPORARILY DISABLED â€” DO NOT DELETE.
                 // Business decision: assigning a program to a student is considered
                 // sufficient to establish eligibility. Additional eligibility checks
                 // during academic registration are therefore not required at this stage.
@@ -168,13 +168,13 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
             long academicRegistrationId,
             LoggedInUserDto currentUser)
         {
-            EnsureUniversityAccess(currentUser);
+            EnsureAcademicRecordReadAccess(currentUser);
 
             var registration = await GetRegistrationWithResultsAsync(academicRegistrationId, asNoTracking: true);
             if (registration == null)
                 throw new CustomException("Academic registration not found.", StatusCodes.Status404NotFound);
 
-            EnsureRegistrationUniversityAccess(registration, currentUser);
+            EnsureRegistrationReadAccess(registration, currentUser);
             ValidateRegistrationCourseMappings(registration);
 
             return MapAcademicRegistrationResults(registration);
@@ -184,14 +184,45 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
             long applicationId,
             LoggedInUserDto currentUser)
         {
-            EnsureUniversityAccess(currentUser);
+            EnsureAcademicRecordReadAccess(currentUser);
 
-            var applicationProgramId = await _context.KfStudentProgramApplications
+            var applicationProgramQuery = _context.KfStudentProgramApplications
                 .AsNoTracking()
-                .Where(x => x.ApplicationId == applicationId &&
-                            currentUser.UniversityIds.Contains(x.Program.UniversityId))
+                .Where(x => x.ApplicationId == applicationId);
+
+            if (currentUser.StaffType == StaffType.University)
+            {
+                applicationProgramQuery = applicationProgramQuery.Where(x =>
+                    currentUser.UniversityIds.Contains(x.Program.UniversityId));
+            }
+
+            var applicationProgramId = await applicationProgramQuery
                 .Select(x => (long?)x.ProgramId)
                 .FirstOrDefaultAsync();
+
+            if (!applicationProgramId.HasValue)
+            {
+                var fallbackQuery = _context.KfStudentProgramApplications
+                    .AsNoTracking()
+                    .Where(x => x.StudentId == applicationId);
+
+                if (currentUser.StaffType == StaffType.University)
+                {
+                    fallbackQuery = fallbackQuery.Where(x =>
+                        currentUser.UniversityIds.Contains(x.Program.UniversityId));
+                }
+
+                var fallbackApp = await fallbackQuery
+                    .OrderByDescending(x => x.ApplicationId)
+                    .Select(x => new { x.ApplicationId, x.ProgramId })
+                    .FirstOrDefaultAsync();
+
+                if (fallbackApp != null)
+                {
+                    applicationId = fallbackApp.ApplicationId;
+                    applicationProgramId = fallbackApp.ProgramId;
+                }
+            }
 
             if (!applicationProgramId.HasValue)
                 return null;
@@ -246,6 +277,27 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     x.StudentId
                 })
                 .FirstOrDefaultAsync();
+
+            if (anchorApplication == null)
+            {
+                var studentFallbackQuery = _context.KfStudentProgramApplications
+                    .AsNoTracking()
+                    .Where(x => x.StudentId == applicationId);
+
+                if (currentUser.StaffType == StaffType.University)
+                {
+                    studentFallbackQuery = studentFallbackQuery.Where(x => currentUser.UniversityIds.Contains(x.Program.UniversityId));
+                }
+
+                anchorApplication = await studentFallbackQuery
+                    .OrderByDescending(x => x.ApplicationId)
+                    .Select(x => new
+                    {
+                        x.ApplicationId,
+                        x.StudentId
+                    })
+                    .FirstOrDefaultAsync();
+            }
 
             if (anchorApplication == null)
                 return null;
@@ -1562,6 +1614,36 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
             if (expUtc == actUtc) return true;
 
             return Math.Abs((expUtc - actUtc).TotalMilliseconds) < 1.0;
+        }
+
+        private static void EnsureAcademicRecordReadAccess(LoggedInUserDto currentUser)
+        {
+            if (currentUser.StaffType != StaffType.University && currentUser.StaffType != StaffType.Ngo && !currentUser.IsSuperAdmin)
+                throw new UnauthorizedAccessException();
+
+            if (currentUser.StaffType == StaffType.University && !currentUser.UniversityIds.Any())
+                throw new UnauthorizedAccessException("User is not associated with a university.");
+        }
+
+        private static void EnsureRegistrationReadAccess(
+            KfStudentAcademicRegistration registration,
+            LoggedInUserDto currentUser)
+        {
+            if (registration.Program == null || registration.Application == null)
+            {
+                throw new CustomException(
+                    "The academic registration is missing its program or application relationship.",
+                    StatusCodes.Status409Conflict);
+            }
+
+            if (currentUser.StaffType == StaffType.University && !currentUser.UniversityIds.Contains(registration.Program.UniversityId))
+                throw new UnauthorizedAccessException();
+
+            if (registration.Application.ProgramId != registration.ProgramId ||
+                registration.Application.StudentId != registration.StudentId)
+                throw new CustomException(
+                    "The academic registration does not match the application's student and program.",
+                    StatusCodes.Status409Conflict);
         }
 
         private static void EnsureUniversityAccess(LoggedInUserDto currentUser)
