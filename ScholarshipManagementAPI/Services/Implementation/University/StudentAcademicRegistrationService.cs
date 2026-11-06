@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Globalization;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
@@ -583,11 +583,15 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                 if (dto.CourseResults.Any(x => x == null))
                     throw new CustomException("Course results cannot contain empty entries.");
 
-                if (dto.SemesterGpa.HasValue &&
-                    (dto.SemesterGpa.Value < 0m || dto.SemesterGpa.Value > 4m ||
-                     decimal.Round(dto.SemesterGpa.Value, 2) != dto.SemesterGpa.Value))
+                if (!dto.SemesterGpa.HasValue)
                 {
-                    throw new CustomException("Semester GPA must be between 0.00 and 4.00 with no more than two decimal places.");
+                    throw new CustomException("Enter the semester GPA (0.00 – 4.00).", StatusCodes.Status400BadRequest);
+                }
+
+                if (dto.SemesterGpa.Value < 0m || dto.SemesterGpa.Value > 4m ||
+                    decimal.Round(dto.SemesterGpa.Value, 2) != dto.SemesterGpa.Value)
+                {
+                    throw new CustomException("Semester GPA must be between 0.00 and 4.00 with no more than two decimal places.", StatusCodes.Status400BadRequest);
                 }
 
                 var internalNote = string.IsNullOrWhiteSpace(dto.InternalNote)
@@ -961,6 +965,11 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                 if (semesterResult == null)
                     throw new CustomException("Save the semester results as a Draft before finalizing them.");
 
+                if (!semesterResult.SemesterGpa.HasValue || semesterResult.SemesterGpa.Value < 0m || semesterResult.SemesterGpa.Value > 4m)
+                {
+                    throw new CustomException("Enter the semester GPA (0.00 – 4.00).", StatusCodes.Status400BadRequest);
+                }
+
                 if (!string.Equals(semesterResult.SubmissionStatus, "Draft", StringComparison.Ordinal))
                 {
                     throw new CustomException(
@@ -1182,6 +1191,11 @@ namespace ScholarshipManagementAPI.Services.Implementation.University
                     throw new CustomException(
                         "The previous semester must have finalized results with submission audit details before progression.",
                         StatusCodes.Status409Conflict);
+                }
+
+                if (!semesterResult.SemesterGpa.HasValue || semesterResult.SemesterGpa.Value < 0m || semesterResult.SemesterGpa.Value > 4m)
+                {
+                    throw new CustomException("Enter the semester GPA (0.00 – 4.00).", StatusCodes.Status400BadRequest);
                 }
 
                 var enrollmentIds = registration.KfStudentCourseEnrollments
