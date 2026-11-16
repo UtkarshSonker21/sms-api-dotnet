@@ -11,6 +11,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using static System.Net.Mime.MediaTypeNames;
 
 namespace ScholarshipManagementAPI.Services.Implementation.Common
@@ -21,37 +23,23 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
         private readonly IConfiguration _config;
         private readonly IAdminEmailTemplateService _adminEmailTemplateService;
         private readonly IHttpContextAccessor _httpContextAccessor;
-
-        private const string ApplicationSubjectPrefix = "[Kafaat Application]";
-
-        /// <summary>
-        /// Applies the consistent "[Kafaat Application]" prefix to outgoing email subjects,
-        /// avoiding duplicate prefixes if already present.
-        /// </summary>
-        /// <param name="subject">The raw subject text.</param>
-        /// <returns>Subject prefixed with "[Kafaat Application]".</returns>
-        private static string FormatSubjectWithAppPrefix(string? subject)
-        {
-            if (string.IsNullOrWhiteSpace(subject))
-                return ApplicationSubjectPrefix;
-
-            var trimmed = subject.Trim();
-            if (trimmed.StartsWith(ApplicationSubjectPrefix, StringComparison.OrdinalIgnoreCase))
-                return trimmed;
-
-            return $"{ApplicationSubjectPrefix} {trimmed}";
-        }
+        private readonly ILogger<NotificationService>? _logger;
+        private readonly IHostEnvironment? _env;
 
         public NotificationService(
             IEmailService emailService,
             IConfiguration config,
             IAdminEmailTemplateService adminEmailTemplateService,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            ILogger<NotificationService>? logger = null,
+            IHostEnvironment? env = null)
         {
             _emailService = emailService;
             _config = config;
             _adminEmailTemplateService = adminEmailTemplateService;
             _httpContextAccessor = httpContextAccessor;
+            _logger = logger;
+            _env = env;
         }
 
 
@@ -78,14 +66,18 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                     IsActive = true
                 });
 
-            var template = result?.Items?.FirstOrDefault();
+            var template = result?.Items?
+                .FirstOrDefault(t => string.Equals(t.TemplateName?.Trim(), "New User Account", StringComparison.OrdinalIgnoreCase))
+                ?? result?.Items?.FirstOrDefault();
 
             if (template == null)
                 throw new InvalidOperationException("Email template 'New User Account' not found.");
 
 
-            string rawSubject = template.Subject ?? "Your Account Has Been Created";
-            string subject = FormatSubjectWithAppPrefix(rawSubject);
+            // Subject directly from database template with safe fallback
+            string subject = !string.IsNullOrWhiteSpace(template.Subject)
+                ? template.Subject.Trim()
+                : "Kafaat Application - Your Account Has Been Created";
             string body = template.Template ?? string.Empty;
 
             // Read config safely
@@ -148,14 +140,17 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 }
             );
 
-            var template = result?.Items?.FirstOrDefault();
+            var template = result?.Items?
+                .FirstOrDefault(t => string.Equals(t.TemplateName?.Trim(), "Forgot Username", StringComparison.OrdinalIgnoreCase))
+                ?? result?.Items?.FirstOrDefault();
 
             if (template == null)
                 throw new InvalidOperationException("Email template 'Forgot Username' not found.");
 
-            // Safe subject/body
-            string rawSubject = template.Subject ?? "Your Username";
-            string subject = FormatSubjectWithAppPrefix(rawSubject);
+            // Subject directly from database template with safe fallback
+            string subject = !string.IsNullOrWhiteSpace(template.Subject)
+                ? template.Subject.Trim()
+                : "Kafaat Application - Admin Portal Usernames";
             string body = template.Template ?? string.Empty;
 
             // Read config safely
@@ -222,14 +217,17 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 }
             );
 
-            var template = result?.Items?.FirstOrDefault();
+            var template = result?.Items?
+                .FirstOrDefault(t => string.Equals(t.TemplateName?.Trim(), "Forgot Password", StringComparison.OrdinalIgnoreCase))
+                ?? result?.Items?.FirstOrDefault();
 
             if (template == null)
                 throw new InvalidOperationException("Email template 'Forgot Password' not found.");
 
-            // Safe subject/body
-            string rawSubject = template.Subject ?? "Forgot Password";
-            string subject = FormatSubjectWithAppPrefix(rawSubject);
+            // Subject directly from database template with safe fallback
+            string subject = !string.IsNullOrWhiteSpace(template.Subject)
+                ? template.Subject.Trim()
+                : "Kafaat Application - Ifnoss Portal Password";
             string body = template.Template ?? string.Empty;
 
             // Read config safely
@@ -294,14 +292,17 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 }
             );
 
-            var template = result?.Items?.FirstOrDefault();
+            var template = result?.Items?
+                .FirstOrDefault(t => string.Equals(t.TemplateName?.Trim(), "Login With Code", StringComparison.OrdinalIgnoreCase))
+                ?? result?.Items?.FirstOrDefault();
 
             if (template == null)
                 throw new InvalidOperationException("Email template 'Login With Code' not found.");
 
-            // Safe subject/body
-            string rawSubject = template.Subject ?? "Login With Code";
-            string subject = FormatSubjectWithAppPrefix(rawSubject);
+            // Subject directly from database template with safe fallback
+            string subject = !string.IsNullOrWhiteSpace(template.Subject)
+                ? template.Subject.Trim()
+                : "Kafaat Application - Your Login Verification Code";
             string body = template.Template ?? string.Empty;
 
             // Read config safely
@@ -327,6 +328,21 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 .Replace("###campusname###", organizationName ?? string.Empty)
                 .Replace("###siteurl###", baseUrl ?? string.Empty)
                 .Replace("###logoUrl###", logoUrl ?? string.Empty);
+
+            // Diagnostic logging immediately before sending email
+            string apiEnv = _env?.EnvironmentName
+                ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+                ?? "Unknown";
+
+            _logger?.LogInformation(
+                "[DIAGNOSTIC] SendLoginCodeAsync: Recipient='{Recipient}', TemplateName='{TemplateName}', DbSubject='{DbSubject}', FinalSubject='{FinalSubject}', Environment='{Environment}'",
+                toEmail,
+                template.TemplateName,
+                template.Subject,
+                subject,
+                apiEnv
+            );
+            Console.WriteLine($"[DIAGNOSTIC] SendLoginCodeAsync => Recipient: '{toEmail}', TemplateName: '{template.TemplateName}', DbSubject: '{template.Subject}', FinalSubject: '{subject}', Environment: '{apiEnv}'");
 
             // Send email
             await _emailService.SendHtmlAsync(toEmail, subject, body);
@@ -359,7 +375,7 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
             httpContext ??= _httpContextAccessor?.HttpContext;
 
             // Retrieve base subject from database by TemplateName, fallback to default if missing or inactive
-            string baseSubject = "[Kafaat Application] Exception Details";
+            string baseSubject = "Kafaat Application - Exception Details";
             try
             {
                 var filterResult = await _adminEmailTemplateService.GetByFilterAsync(
@@ -382,13 +398,10 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 // Safety fallback to default base subject
             }
 
-            // Ensure consistent prefix without duplicates
-            string prefixedSubject = FormatSubjectWithAppPrefix(baseSubject);
-
-            // Append dynamic source suffix
+            // Append dynamic source suffix directly to base subject from database
             string subject = string.IsNullOrWhiteSpace(source)
-                ? prefixedSubject
-                : $"{prefixedSubject} - {source}";
+                ? baseSubject
+                : $"{baseSubject} - {source}";
 
             // Generate simplified HTML email matching previous IFNOSS application error notification
             string body = await BuildKafaatExceptionAlertHtmlAsync(ex, source, httpContext);
