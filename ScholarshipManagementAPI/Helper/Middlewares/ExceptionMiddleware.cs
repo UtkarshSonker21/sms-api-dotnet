@@ -1,4 +1,4 @@
-﻿using ScholarshipManagementAPI.DTOs.Common;
+using ScholarshipManagementAPI.DTOs.Common;
 using ScholarshipManagementAPI.DTOs.Common.Response;
 using ScholarshipManagementAPI.Helper.Utilities;
 using ScholarshipManagementAPI.Services.Interface.Common;
@@ -21,6 +21,8 @@ namespace ScholarshipManagementAPI.Helper.Middlewares
 
         public async Task InvokeAsync(HttpContext context, RequestDelegate next)
         {
+            context.Request.EnableBuffering();
+
             try
             {
                 await next(context);
@@ -65,12 +67,20 @@ namespace ScholarshipManagementAPI.Helper.Middlewares
 
                 FileLogger.LogError(requestId, ex, endpoint);
 
-                // Send exception email only in Production
-                if (_env.IsStaging() || _env.IsProduction())
+                // Send exception email in Staging/Production or when test-error is triggered
+                if (_env.IsStaging() || _env.IsProduction() || context.Request.Path.StartsWithSegments("/api/common/test-error", StringComparison.OrdinalIgnoreCase))
                 {
-                    await _notificationService.SendExceptionAlertAsync(
-                        ex,
-                        $"{context.Request.Method} {context.Request.Path}");
+                    try
+                    {
+                        await _notificationService.SendExceptionAlertAsync(
+                            ex,
+                            $"{context.Request.Method} {context.Request.Path}",
+                            context);
+                    }
+                    catch (Exception emailEx)
+                    {
+                        FileLogger.LogError(requestId, emailEx, "ExceptionAlertEmailFailure");
+                    }
                 }
 
                 var response = new ApiResponseDto
@@ -93,12 +103,20 @@ namespace ScholarshipManagementAPI.Helper.Middlewares
 
                 FileLogger.LogError(requestId, ex, endpoint);
 
-                // Send exception email only in Production
-                if (_env.IsStaging() || _env.IsProduction())
+                // Send exception email in Staging/Production or when test-error is triggered
+                if (_env.IsStaging() || _env.IsProduction() || context.Request.Path.StartsWithSegments("/api/common/test-error", StringComparison.OrdinalIgnoreCase))
                 {
-                    await _notificationService.SendExceptionAlertAsync(
-                        ex,
-                        $"{context.Request.Method} {context.Request.Path}");
+                    try
+                    {
+                        await _notificationService.SendExceptionAlertAsync(
+                            ex,
+                            $"{context.Request.Method} {context.Request.Path}",
+                            context);
+                    }
+                    catch (Exception emailEx)
+                    {
+                        FileLogger.LogError(requestId, emailEx, "ExceptionAlertEmailFailure");
+                    }
                 }
 
                 var response = new ApiResponseDto
