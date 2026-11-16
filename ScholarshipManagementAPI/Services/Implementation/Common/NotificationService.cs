@@ -22,6 +22,26 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
         private readonly IAdminEmailTemplateService _adminEmailTemplateService;
         private readonly IHttpContextAccessor _httpContextAccessor;
 
+        private const string ApplicationSubjectPrefix = "[Kafaat Application]";
+
+        /// <summary>
+        /// Applies the consistent "[Kafaat Application]" prefix to outgoing email subjects,
+        /// avoiding duplicate prefixes if already present.
+        /// </summary>
+        /// <param name="subject">The raw subject text.</param>
+        /// <returns>Subject prefixed with "[Kafaat Application]".</returns>
+        private static string FormatSubjectWithAppPrefix(string? subject)
+        {
+            if (string.IsNullOrWhiteSpace(subject))
+                return ApplicationSubjectPrefix;
+
+            var trimmed = subject.Trim();
+            if (trimmed.StartsWith(ApplicationSubjectPrefix, StringComparison.OrdinalIgnoreCase))
+                return trimmed;
+
+            return $"{ApplicationSubjectPrefix} {trimmed}";
+        }
+
         public NotificationService(
             IEmailService emailService,
             IConfiguration config,
@@ -64,11 +84,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 throw new InvalidOperationException("Email template 'New User Account' not found.");
 
 
-            string subject = template.Subject ?? "Your Account Has Been Created";
+            string rawSubject = template.Subject ?? "Your Account Has Been Created";
+            string subject = FormatSubjectWithAppPrefix(rawSubject);
             string body = template.Template ?? string.Empty;
 
             // Read config safely
-            string baseUrl = _config["AlertSettings:BaseUrl"]
+            string baseUrl = _config["AlertSettings:FrontendBaseUrl"]
                 ?? throw new InvalidOperationException("AlertSettings:BaseUrl is not configured.");
 
             string logoPath = _config["AlertSettings:LogoPath"]
@@ -103,8 +124,9 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
         /// <param name="organizationName">The campus or organization name.</param>
         /// <returns>A task representing the asynchronous email operation.</returns>
         public async Task SendForgotUsernameAsync(
-            string toEmail, string loginName , 
-            string fullName, string organizationName)
+            string toEmail, string loginName, 
+            string fullName, string organizationName,
+            string? role = null)
         {
             //var subject = "Your Username";
 
@@ -132,11 +154,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 throw new InvalidOperationException("Email template 'Forgot Username' not found.");
 
             // Safe subject/body
-            string subject = template.Subject ?? "Your Username";
+            string rawSubject = template.Subject ?? "Your Username";
+            string subject = FormatSubjectWithAppPrefix(rawSubject);
             string body = template.Template ?? string.Empty;
 
             // Read config safely
-            string baseUrl = _config["AlertSettings:BaseUrl"]
+            string baseUrl = _config["AlertSettings:FrontendBaseUrl"]
                 ?? throw new InvalidOperationException("AlertSettings:BaseUrl is not configured.");
 
             string logoPath = _config["AlertSettings:LogoPath"]
@@ -148,11 +171,16 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
 
             string logoUrl = baseUrl + logoPath;
 
+            string userRole = !string.IsNullOrWhiteSpace(role)
+                ? role
+                : (!string.IsNullOrWhiteSpace(organizationName) ? organizationName : string.Empty);
 
             // Replace placeholders
             body = body
                 .Replace("###Name###", fullName ?? string.Empty)
                 .Replace("###username###", loginName ?? string.Empty)
+                .Replace("###role###", userRole)
+                .Replace("###Role###", userRole)
                 .Replace("###campusname###", organizationName ?? string.Empty)
                 .Replace("###siteurl###", baseUrl ?? string.Empty)
                 .Replace("###logoUrl###", logoUrl ?? string.Empty);
@@ -200,11 +228,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 throw new InvalidOperationException("Email template 'Forgot Password' not found.");
 
             // Safe subject/body
-            string subject = template.Subject ?? "Forgot Password";
+            string rawSubject = template.Subject ?? "Forgot Password";
+            string subject = FormatSubjectWithAppPrefix(rawSubject);
             string body = template.Template ?? string.Empty;
 
             // Read config safely
-            string baseUrl = _config["AlertSettings:BaseUrl"]
+            string baseUrl = _config["AlertSettings:FrontendBaseUrl"]
                 ?? throw new InvalidOperationException("AlertSettings:BaseUrl is not configured.");
 
             string logoPath = _config["AlertSettings:LogoPath"]
@@ -271,11 +300,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 throw new InvalidOperationException("Email template 'Login With Code' not found.");
 
             // Safe subject/body
-            string subject = template.Subject ?? "Login With Code";
+            string rawSubject = template.Subject ?? "Login With Code";
+            string subject = FormatSubjectWithAppPrefix(rawSubject);
             string body = template.Template ?? string.Empty;
 
             // Read config safely
-            string baseUrl = _config["AlertSettings:BaseUrl"]
+            string baseUrl = _config["AlertSettings:FrontendBaseUrl"]
                 ?? throw new InvalidOperationException("AlertSettings:BaseUrl is not configured.");
 
             string logoPath = _config["AlertSettings:LogoPath"]
@@ -307,8 +337,8 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
 
 
         /// <summary>
-        /// Sends a detailed exception alert email to the configured administrator using the active
-        /// database-configured Exception Alert template (EmailTempID = 20).
+        /// Sends an exception alert email to the configured administrator.
+        /// Temporarily generates the simplified HTML format in code to match the previous IFNOSS application layout for client review.
         /// </summary>
         /// <param name="ex">The exception captured by the application or middleware.</param>
         /// <param name="source">The API endpoint, controller action, or operation source where the exception occurred.</param>
@@ -326,54 +356,49 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                     "AlertSettings:AdminEmail is not configured.");
             }
 
-            // 1. Fetch the active Exception Alert template using AdminEmailTemplateService
-            var templateResult = await _adminEmailTemplateService.GetByIdAsync(20);
-            if (templateResult == null || !templateResult.IsActive)
+            httpContext ??= _httpContextAccessor?.HttpContext;
+
+            // Retrieve base subject from database by TemplateName, fallback to default if missing or inactive
+            string baseSubject = "[Kafaat Application] Exception Details";
+            try
             {
-                // Fallback by search if record 20 wasn't retrieved directly
                 var filterResult = await _adminEmailTemplateService.GetByFilterAsync(
                     new AdminEmailTemplateFilterDto
                     {
                         SearchText = "Exception Alert",
                         IsActive = true
                     });
-                templateResult = filterResult?.Items?.FirstOrDefault(t => t.EmailTempId == 20)
-                                 ?? filterResult?.Items?.FirstOrDefault();
-            }
 
-            if (templateResult == null || string.IsNullOrWhiteSpace(templateResult.Template))
+                var template = filterResult?.Items?
+                    .FirstOrDefault(t => string.Equals(t.TemplateName?.Trim(), "Exception Alert", StringComparison.OrdinalIgnoreCase));
+
+                if (template != null && !string.IsNullOrWhiteSpace(template.Subject))
+                {
+                    baseSubject = template.Subject.Trim();
+                }
+            }
+            catch
             {
-                throw new InvalidOperationException("Email template 'Exception Alert' (EmailTempID = 20) not found or inactive in database.");
+                // Safety fallback to default base subject
             }
 
-            httpContext ??= _httpContextAccessor?.HttpContext;
+            // Ensure consistent prefix without duplicates
+            string prefixedSubject = FormatSubjectWithAppPrefix(baseSubject);
 
-            string baseUrl = _config["AlertSettings:BaseUrl"] ?? "https://ifnoss.com/";
-            string logoPath = _config["AlertSettings:LogoPath"] ?? "assets/images/ifnoss-logo.png";
+            // Append dynamic source suffix
+            string subject = string.IsNullOrWhiteSpace(source)
+                ? prefixedSubject
+                : $"{prefixedSubject} - {source}";
 
-            baseUrl = baseUrl.TrimEnd('/') + "/";
-            logoPath = logoPath.TrimStart('/');
-
-            string logoUrl = baseUrl + logoPath;
-            string occurredOnUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");
-
-            // 2. Format subject dynamically
-            string rawSubject = templateResult.Subject ?? "System Exception Alert";
-            string subject = rawSubject.Contains("###source###")
-                ? rawSubject.Replace("###source###", source ?? string.Empty)
-                : $"{rawSubject} ({source})";
-
-            // 3. Populate dynamic placeholders in database HTML template
-            string body = await PopulateExceptionAlertPlaceholdersAsync(
-                templateResult.Template,
-                ex,
-                source,
-                httpContext,
-                logoUrl,
-                occurredOnUtc);
+            // Generate simplified HTML email matching previous IFNOSS application error notification
+            string body = await BuildKafaatExceptionAlertHtmlAsync(ex, source, httpContext);
 
             await _emailService.SendHtmlAsync(adminEmail, subject, body);
         }
+
+
+
+
 
         private static readonly string[] SensitiveKeySubstrings = new[]
         {
@@ -593,6 +618,208 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
             }
 
             return "N/A";
+        }
+
+        /// <summary>
+        /// Builds the simplified two-column HTML email template matching the previous IFNOSS application error notification,
+        /// featuring a simple grey heading, bold blue labels right-aligned, plain dynamic values left-aligned, and all diagnostic fields.
+        /// </summary>
+        /// <param name="ex">The captured exception.</param>
+        /// <param name="source">The operation or endpoint source.</param>
+        /// <param name="context">The HTTP context of the failing request.</param>
+        /// <returns>A complete HTML email body formatted in the replica IFNOSS layout.</returns>
+        private async Task<string> BuildKafaatExceptionAlertHtmlAsync(
+            Exception ex,
+            string source,
+            HttpContext? context)
+        {
+            var req = context?.Request;
+            string occurredOnUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");
+
+            // 1. Error & Details
+            string errorType = WebUtility.HtmlEncode(ex.GetType().FullName ?? ex.GetType().Name);
+            string details = WebUtility.HtmlEncode(ex.Message ?? "N/A");
+            if (ex.InnerException != null)
+            {
+                details += $"<br/><span style=\"color: #b91c1c; font-size: 11px;\"><strong>Inner:</strong> {WebUtility.HtmlEncode(ex.InnerException.GetType().FullName ?? ex.InnerException.GetType().Name)}: {WebUtility.HtmlEncode(ex.InnerException.Message)}</span>";
+            }
+
+            // 2. Form Values
+            string formValuesHtml = await CollectFormValuesHtmlAsync(context);
+
+            // 3. Request Information
+            string requestUrl = "N/A";
+            string requestHost = "N/A";
+            string userAgent = "N/A";
+            string urlReferer = "N/A";
+
+            if (req != null)
+            {
+                requestUrl = $"{req.Scheme}://{req.Host}{req.PathBase}{req.Path}{req.QueryString}";
+                requestHost = req.Host.Value;
+
+                if (req.Headers.TryGetValue("User-Agent", out var ua) && !string.IsNullOrWhiteSpace(ua))
+                    userAgent = ua.ToString();
+
+                if (req.Headers.TryGetValue("Referer", out var referer) && !string.IsNullOrWhiteSpace(referer))
+                    urlReferer = referer.ToString();
+            }
+
+            string hostName;
+            try
+            {
+                hostName = System.Net.Dns.GetHostName();
+            }
+            catch
+            {
+                hostName = Environment.MachineName ?? "N/A";
+            }
+
+            string urlHtml = requestUrl != "N/A"
+                ? $"<a href=\"{WebUtility.HtmlEncode(requestUrl)}\" style=\"color: #0366d6; text-decoration: underline;\">{WebUtility.HtmlEncode(requestUrl)}</a>"
+                : "N/A";
+
+            // 4. Stack Trace
+            string stackTraceHtml = $"<pre style=\"margin: 0; padding: 6px; background-color: #f6f8fa; border: 1px solid #e1e4e8; font-family: Consolas, 'Courier New', monospace; font-size: 11px; line-height: 1.4; color: #24292e; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto;\">{WebUtility.HtmlEncode(ex.ToString())}</pre>";
+
+            // 5. User Information
+            string userName = "N/A";
+            string userId = "N/A";
+            string roleId = "N/A";
+
+            if (context?.User?.Identity?.IsAuthenticated == true)
+            {
+                userName = context.User.FindFirst(JwtClaimTypes.UserName)?.Value
+                           ?? context.User.Identity.Name
+                           ?? "Authenticated User";
+                userId = context.User.FindFirst(JwtClaimTypes.LoginId)?.Value
+                         ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                         ?? "N/A";
+                roleId = context.User.FindFirst(JwtClaimTypes.RoleId)?.Value ?? "N/A";
+            }
+
+            // 6. Current Sessions
+            string currentSessionsHtml = CollectCurrentSessionsHtml(context);
+
+            // 7. Method & Source
+            string method = WebUtility.HtmlEncode(req?.Method ?? "N/A");
+            string sourceEnc = WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(source) ? "N/A" : source);
+
+            return $@"<!DOCTYPE html>
+<html lang=""en"">
+<head>
+  <meta charset=""utf-8"">
+  <title>Kafaat Application Error Details</title>
+</head>
+<body style=""margin: 0; padding: 12px; width: 100%; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #ffffff; font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #333333; line-height: 1.4;"">
+  <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""width: 100%; border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; font-size: 12px;"">
+    
+    <!-- Top Heading Row: Simple light-grey background, blue bold text matching previous IFNOSS application -->
+    <tr>
+      <td colspan=""2"" style=""padding: 10px 14px; background-color: #eef2f7; border: 1px solid #d0d7de; font-size: 15px; font-weight: bold; color: #003399; letter-spacing: -0.2px;"">
+        Kafaat Application Error Details
+      </td>
+    </tr>
+
+    <!-- Error -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Error</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{errorType}</td>
+    </tr>
+
+    <!-- Details -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Details</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal; word-break: break-word;"">{details}</td>
+    </tr>
+
+    <!-- Form Values -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Form Values</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{formValuesHtml}</td>
+    </tr>
+
+    <!-- URL -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">URL</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal; word-break: break-all;"">{urlHtml}</td>
+    </tr>
+
+    <!-- Stack Trace -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Stack Trace</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{stackTraceHtml}</td>
+    </tr>
+
+    <!-- Request Host -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Request Host</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{WebUtility.HtmlEncode(requestHost)}</td>
+    </tr>
+
+    <!-- Host Name -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Host Name</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{WebUtility.HtmlEncode(hostName)}</td>
+    </tr>
+
+    <!-- User Agent -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">User Agent</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal; word-break: break-all;"">{WebUtility.HtmlEncode(userAgent)}</td>
+    </tr>
+
+    <!-- URL Referer -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">URL Referer</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal; word-break: break-all;"">{WebUtility.HtmlEncode(urlReferer)}</td>
+    </tr>
+
+    <!-- UserName -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">UserName</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{WebUtility.HtmlEncode(userName)}</td>
+    </tr>
+
+    <!-- User ID -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">User ID</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{WebUtility.HtmlEncode(userId)}</td>
+    </tr>
+
+    <!-- Role ID -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Role ID</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{WebUtility.HtmlEncode(roleId)}</td>
+    </tr>
+
+    <!-- Current Sessions -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Current Sessions</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{currentSessionsHtml}</td>
+    </tr>
+
+    <!-- Method -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Method</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{method}</td>
+    </tr>
+
+    <!-- Source -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Source</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{sourceEnc}</td>
+    </tr>
+
+    <!-- Occurrence Date and Time (UTC) -->
+    <tr>
+      <td style=""width: 160px; padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; font-weight: bold; color: #003399; text-align: right; vertical-align: top; white-space: nowrap;"">Date &amp; Time (UTC)</td>
+      <td style=""padding: 8px 12px; border: 1px solid #e1e4e8; background-color: #ffffff; color: #24292e; vertical-align: top; font-weight: normal;"">{WebUtility.HtmlEncode(occurredOnUtc)}</td>
+    </tr>
+
+  </table>
+</body>
+</html>";
         }
 
         /// <summary>

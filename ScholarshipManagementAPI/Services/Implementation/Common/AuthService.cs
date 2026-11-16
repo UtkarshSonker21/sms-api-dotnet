@@ -189,19 +189,38 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                     x.IsActive)
                 .Select(x => new
                 {
+                    x.LoginId,
                     x.LoginName,
                     x.RecoveryEmail,
                     x.IsActive,
                     x.Staff.StaffSalutation,
                     x.Staff.StaffFirstName,
                     x.Staff.StaffLastName,
-                    x.Staff.StaffType
+                    x.Staff.StaffType,
+                    RoleName = x.KfUsersRoleAssignmentLogins
+                        .OrderByDescending(r => r.IsDefault)
+                        .Select(r => r.Role.RoleName)
+                        .FirstOrDefault()
                 })
                 .FirstOrDefaultAsync();
 
-
             if (user != null)
             {
+                string roleName = user.RoleName;
+                if (string.IsNullOrWhiteSpace(roleName))
+                {
+                    roleName = user.StaffType switch
+                    {
+                        (long)StaffType.SuperAdmin => "SystemAdmin",
+                        (long)StaffType.Ngo => "NgoAdmin",
+                        (long)StaffType.Marketing => "MarketingAdmin",
+                        (long)StaffType.Finance => "FinanceAdmin",
+                        (long)StaffType.University => "University Coordinator",
+                        (long)StaffType.School => "School Coordinator",
+                        _ => string.Empty
+                    };
+                }
+
                 string organizationName = user.StaffType switch
                 {
                     (long)StaffType.SuperAdmin => "System Administration",
@@ -217,12 +236,12 @@ namespace ScholarshipManagementAPI.Services.Implementation.Common
                 string fullName = $"{user.StaffSalutation} {user.StaffFirstName} {user.StaffLastName}"
                                  .Trim();
 
-
                 await _notificationService.SendForgotUsernameAsync(
                     user.RecoveryEmail,
                     user.LoginName,
                     fullName,
-                    organizationName
+                    organizationName,
+                    roleName
                 );
             }
 

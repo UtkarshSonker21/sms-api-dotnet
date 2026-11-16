@@ -21,9 +21,10 @@ namespace ScholarshipManagementAPI.Services.Interface.Common
         /// <param name="loginName">The user's registered username.</param>
         /// <param name="fullName">The full name of the user.</param>
         /// <param name="organisationName">The campus or organisation name.</param>
+        /// <param name="role">The user's assigned role name.</param>
         /// <returns>A task representing the asynchronous email operation.</returns>
         Task SendForgotUsernameAsync(string toEmail, string loginName,
-            string fullName, string organisationName);
+            string fullName, string organisationName, string? role = null);
         
         /// <summary>
         /// Sends an email notification containing a secure password reset link.
